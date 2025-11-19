@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import type { Email } from '@/types/email';
 
 interface EmailDetailProps {
   emailId: string | null;
@@ -27,7 +28,7 @@ interface EmailDetailProps {
 export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps) {
   const queryClient = useQueryClient();
 
-  const { data: email, isLoading } = useQuery({
+  const { data: email, isLoading } = useQuery<Email>({
     queryKey: ['email', emailId],
     queryFn: () => emailService.getEmailById(emailId!),
     enabled: !!emailId,

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch } from '@/store/hooks';
-import {  setUser } from '@/store/authSlice';
+import {  logout, setUser } from '@/store/authSlice';
 import { authService } from '@/services/auth.service';
 import type { Email } from '@/types/email';
 import MailboxList from '@/components/inbox/MailboxList';
@@ -9,8 +9,8 @@ import EmailList from '@/components/inbox/EmailList';
 import EmailDetail from '@/components/inbox/EmailDetail';
 import ComposeEmail from '@/components/inbox/ComposeEmail';
 import { Button } from '@/components/ui/button';
-import { Bell, Settings, User, Menu } from 'lucide-react';
-import {  useQueryClient, useQuery } from '@tanstack/react-query';
+import { Bell, Settings, User, Menu, LogOut } from 'lucide-react';
+import {  useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 
 export default function InboxPage() {
   const navigate = useNavigate();
@@ -42,18 +42,18 @@ export default function InboxPage() {
     }
   }, [meData, dispatch]);
 
-  // const logoutMutation = useMutation({
-  //   mutationFn: authService.logout,
-  //   onSuccess: () => {
-  //     dispatch(logout());
-  //     queryClient.clear();
-  //     navigate('/login');
-  //   },
-  // });
+  const logoutMutation = useMutation({
+    mutationFn: authService.logout,
+    onSuccess: () => {
+      dispatch(logout());
+      queryClient.clear();
+      navigate('/login');
+    },
+  });
 
-  // const handleLogout = () => {
-  //   logoutMutation.mutate();
-  // };
+  const handleLogout = () => {
+    logoutMutation.mutate();
+  };
 
   const handleSelectMailbox = (id: string) => {
     navigate(`/${id}`);
@@ -102,6 +102,16 @@ export default function InboxPage() {
           <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
             <User className="h-5 w-5 text-white" />
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-gray-300 hover:text-white hover:bg-gray-700 flex items-center gap-2"
+            onClick={handleLogout}
+            disabled={logoutMutation.isPending}
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         </div>
       </header>
 
