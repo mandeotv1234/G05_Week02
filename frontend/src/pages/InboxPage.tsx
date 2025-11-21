@@ -1,36 +1,45 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { useAppDispatch } from '@/store/hooks';
-import {  logout, setUser } from '@/store/authSlice';
-import { authService } from '@/services/auth.service';
-import type { Email } from '@/types/email';
-import MailboxList from '@/components/inbox/MailboxList';
-import EmailList from '@/components/inbox/EmailList';
-import EmailDetail from '@/components/inbox/EmailDetail';
-import ComposeEmail from '@/components/inbox/ComposeEmail';
-import { Button } from '@/components/ui/button';
-import { Bell, Settings, User, Menu, LogOut } from 'lucide-react';
-import {  useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useAppDispatch } from "@/store/hooks";
+import { logout, setUser } from "@/store/authSlice";
+import { authService } from "@/services/auth.service";
+import { emailService } from "@/services/email.service";
+import { getAccessToken } from "@/lib/api-client";
+import type { Email } from "@/types/email";
+import MailboxList from "@/components/inbox/MailboxList";
+import EmailList from "@/components/inbox/EmailList";
+import EmailDetail from "@/components/inbox/EmailDetail";
+import ComposeEmail from "@/components/inbox/ComposeEmail";
+import { Button } from "@/components/ui/button";
+import { Bell, Settings, User, Menu, LogOut } from "lucide-react";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 
 export default function InboxPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
   // const user = useAppSelector((state) => state.auth.user);
-  const { mailbox, emailId } = useParams<{ mailbox?: string; emailId?: string }>();
-  
+  const { mailbox, emailId } = useParams<{
+    mailbox?: string;
+    emailId?: string;
+  }>();
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list');
+  const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [composeInitialData, setComposeInitialData] = useState({
+    subject: "",
+    body: "",
+  });
 
   // Use URL params or default to 'inbox'
-  const selectedMailboxId = mailbox || 'inbox';
+  const selectedMailboxId = mailbox || "inbox";
   const selectedEmailId = emailId || null;
 
   // Check authentication on mount if we have tokens
-  const hasRefreshToken = !!localStorage.getItem('refresh_token');
+  const hasRefreshToken = !!localStorage.getItem("refresh_token");
   const { data: meData } = useQuery({
-    queryKey: ['auth', 'me'],
+    queryKey: ["auth", "me"],
     queryFn: authService.getMe,
     retry: false,
     enabled: hasRefreshToken,
@@ -39,15 +48,52 @@ export default function InboxPage() {
   useEffect(() => {
     if (meData?.user) {
       dispatch(setUser(meData.user));
+
+      // Start watching for email updates
+      emailService.watchMailbox().catch(console.error);
+
+      // Connect to SSE
+      const token = getAccessToken();
+      const eventSource = new EventSource(
+        `${
+          import.meta.env.VITE_API_URL || "http://localhost:8080"
+        }/api/events?token=${token}`,
+        {
+          withCredentials: true,
+        }
+      );
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "email_update") {
+            console.log("Received email update:", data.payload);
+            // Invalidate queries to refresh lists
+            queryClient.invalidateQueries({ queryKey: ["emails"] });
+            queryClient.invalidateQueries({ queryKey: ["mailboxes"] });
+          }
+        } catch (error) {
+          console.error("Error parsing SSE message:", error);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error("SSE error:", error);
+        eventSource.close();
+      };
+
+      return () => {
+        eventSource.close();
+      };
     }
-  }, [meData, dispatch]);
+  }, [meData, dispatch, queryClient]);
 
   const logoutMutation = useMutation({
     mutationFn: authService.logout,
     onSuccess: () => {
       dispatch(logout());
       queryClient.clear();
-      navigate('/login');
+      navigate("/login");
     },
   });
 
@@ -57,16 +103,28 @@ export default function InboxPage() {
 
   const handleSelectMailbox = (id: string) => {
     navigate(`/${id}`);
-    setMobileView('list');
+    setMobileView("list");
   };
 
   const handleSelectEmail = (email: Email) => {
     navigate(`/${selectedMailboxId}/${email.id}`);
-    setMobileView('detail');
+    setMobileView("detail");
   };
 
   const handleToggleStar = () => {
-    queryClient.invalidateQueries({ queryKey: ['emails'] });
+    queryClient.invalidateQueries({ queryKey: ["emails"] });
+  };
+
+  const handleForward = (email: Email) => {
+    setComposeInitialData({
+      subject: `Fwd: ${email.subject}`,
+      body: `\n\n---------- Forwarded message ---------\nFrom: ${
+        email.from
+      }\nDate: ${new Date(email.received_at).toLocaleString()}\nSubject: ${
+        email.subject
+      }\nTo: ${email.to.join(", ")}\n\n${email.body || email.preview || ""}`,
+    });
+    setIsComposeOpen(true);
   };
 
   return (
@@ -140,7 +198,11 @@ export default function InboxPage() {
 
           {/* Column 3: Email Detail */}
           <div className="flex-1 bg-gray-900">
-            <EmailDetail emailId={selectedEmailId} onToggleStar={handleToggleStar} />
+            <EmailDetail
+              emailId={selectedEmailId}
+              onToggleStar={handleToggleStar}
+              onForward={handleForward}
+            />
           </div>
         </div>
 
@@ -150,7 +212,9 @@ export default function InboxPage() {
             <div className="absolute inset-0 z-50 bg-gray-800">
               <div className="p-4 border-b border-gray-700">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-white">Mailboxes</h2>
+                  <h2 className="text-lg font-semibold text-white">
+                    Mailboxes
+                  </h2>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -175,7 +239,7 @@ export default function InboxPage() {
             </div>
           )}
 
-          {mobileView === 'list' && (
+          {mobileView === "list" && (
             <EmailList
               mailboxId={selectedMailboxId}
               selectedEmailId={selectedEmailId}
@@ -184,7 +248,7 @@ export default function InboxPage() {
             />
           )}
 
-          {mobileView === 'detail' && selectedEmailId && (
+          {mobileView === "detail" && selectedEmailId && (
             <div className="flex-1 flex flex-col bg-gray-900">
               <div className="p-4 border-b border-gray-700 bg-gray-800">
                 <Button
@@ -193,14 +257,18 @@ export default function InboxPage() {
                   className="text-gray-300 hover:text-white"
                   onClick={() => {
                     navigate(`/${selectedMailboxId}`);
-                    setMobileView('list');
+                    setMobileView("list");
                   }}
                 >
                   ← Back
                 </Button>
               </div>
               <div className="flex-1 overflow-hidden">
-                <EmailDetail emailId={selectedEmailId} onToggleStar={handleToggleStar} />
+                <EmailDetail
+                  emailId={selectedEmailId}
+                  onToggleStar={handleToggleStar}
+                  onForward={handleForward}
+                />
               </div>
             </div>
           )}
@@ -208,7 +276,15 @@ export default function InboxPage() {
       </div>
 
       {/* Compose Email Dialog */}
-      <ComposeEmail open={isComposeOpen} onOpenChange={setIsComposeOpen} />
+      <ComposeEmail
+        open={isComposeOpen}
+        onOpenChange={(open) => {
+          setIsComposeOpen(open);
+          if (!open) setComposeInitialData({ subject: "", body: "" });
+        }}
+        initialSubject={composeInitialData.subject}
+        initialBody={composeInitialData.body}
+      />
     </div>
   );
 }

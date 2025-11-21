@@ -35,6 +35,6 @@ export interface RefreshTokenRequest {
 }
 
 export interface GoogleSignInRequest {
-  token: string;
+  code: string;
+  scope: string [];
 }
-

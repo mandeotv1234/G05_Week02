@@ -1,6 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { emailService } from '@/services/email.service';
-import { Button } from '@/components/ui/button';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { emailService } from "@/services/email.service";
+import { Button } from "@/components/ui/button";
 import {
   Star,
   StarOff,
@@ -16,20 +16,25 @@ import {
   Download,
   FileText,
   Image as ImageIcon,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import type { Email } from '@/types/email';
+} from "lucide-react";
+import { format } from "date-fns";
+import type { Email } from "@/types/email";
 
 interface EmailDetailProps {
   emailId: string | null;
   onToggleStar: (emailId: string) => void;
+  onForward?: (email: Email) => void;
 }
 
-export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps) {
+export default function EmailDetail({
+  emailId,
+  onToggleStar,
+  onForward,
+}: EmailDetailProps) {
   const queryClient = useQueryClient();
 
   const { data: email, isLoading } = useQuery<Email>({
-    queryKey: ['email', emailId],
+    queryKey: ["email", emailId],
     queryFn: () => emailService.getEmailById(emailId!),
     enabled: !!emailId,
   });
@@ -37,8 +42,24 @@ export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps)
   const toggleStarMutation = useMutation({
     mutationFn: emailService.toggleStar,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['email', emailId] });
-      queryClient.invalidateQueries({ queryKey: ['emails'] });
+      queryClient.invalidateQueries({ queryKey: ["email", emailId] });
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+    },
+  });
+
+  const trashMutation = useMutation({
+    mutationFn: emailService.trashEmail,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+      // Maybe navigate back or clear selection?
+      // For now just invalidate
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: emailService.archiveEmail,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
     },
   });
 
@@ -49,12 +70,32 @@ export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps)
     }
   };
 
+  const handleTrash = () => {
+    if (emailId) {
+      trashMutation.mutate(emailId);
+    }
+  };
+
+  const handleArchive = () => {
+    if (emailId) {
+      archiveMutation.mutate(emailId);
+    }
+  };
+
+  const handleForward = () => {
+    if (email && onForward) {
+      onForward(email);
+    }
+  };
+
   if (!emailId) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 bg-gray-900">
         <div className="text-center">
           <Mail className="h-20 w-20 mx-auto mb-4 text-gray-600" />
-          <p className="text-lg font-medium text-gray-300 mb-2">Select an email to read</p>
+          <p className="text-lg font-medium text-gray-300 mb-2">
+            Select an email to read
+          </p>
           <p className="text-sm text-gray-500">Nothing is selected.</p>
         </div>
       </div>
@@ -87,28 +128,29 @@ export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps)
   const getTimeDisplay = (date: string) => {
     const emailDate = new Date(date);
     const now = new Date();
-    const diffInHours = (now.getTime() - emailDate.getTime()) / (1000 * 60 * 60);
+    const diffInHours =
+      (now.getTime() - emailDate.getTime()) / (1000 * 60 * 60);
 
     if (diffInHours < 24) {
-      return `Today, ${format(emailDate, 'h:mm a')}`;
+      return `Today, ${format(emailDate, "h:mm a")}`;
     } else if (diffInHours < 48) {
-      return `Yesterday, ${format(emailDate, 'h:mm a')}`;
+      return `Yesterday, ${format(emailDate, "h:mm a")}`;
     } else {
-      return format(emailDate, 'MMM d, h:mm a');
+      return format(emailDate, "MMM d, h:mm a");
     }
   };
 
   const getFileIcon = (mimeType: string) => {
-    if (mimeType.startsWith('image/')) {
+    if (mimeType.startsWith("image/")) {
       return ImageIcon;
     }
     return FileText;
   };
 
   const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
   return (
@@ -147,6 +189,26 @@ export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps)
           variant="ghost"
           size="sm"
           className="text-gray-300 hover:text-white hover:bg-gray-700"
+          onClick={handleForward}
+          title="Forward"
+        >
+          <Forward className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-gray-300 hover:text-white hover:bg-gray-700"
+          onClick={handleArchive}
+          title="Archive"
+        >
+          <Archive className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-gray-300 hover:text-white hover:bg-gray-700"
+          onClick={handleTrash}
+          title="Delete"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -175,9 +237,14 @@ export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps)
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <p className="text-white font-medium">{email.from_name || email.from}</p>
+                <p className="text-white font-medium">
+                  {email.from_name || email.from}
+                </p>
                 <p className="text-sm text-gray-400">
-                  To: Me{email.to.length > 1 ? `, ${email.to.slice(1).join(', ')}` : ''}
+                  To: Me
+                  {email.to.length > 1
+                    ? `, ${email.to.slice(1).join(", ")}`
+                    : ""}
                 </p>
               </div>
               <span className="text-sm text-gray-400 flex-shrink-0 ml-4">
@@ -190,7 +257,9 @@ export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps)
         {/* Attachments */}
         {email.attachments && email.attachments.length > 0 && (
           <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-300 mb-3">Attachments</h3>
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">
+              Attachments
+            </h3>
             <div className="space-y-2">
               {email.attachments.map((attachment) => {
                 const Icon = getFileIcon(attachment.mime_type);
@@ -203,7 +272,9 @@ export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps)
                       <Icon className="h-5 w-5 text-gray-400" />
                       <div>
                         <p className="text-sm text-white">{attachment.name}</p>
-                        <p className="text-xs text-gray-400">{formatFileSize(attachment.size)}</p>
+                        <p className="text-xs text-gray-400">
+                          {formatFileSize(attachment.size)}
+                        </p>
                       </div>
                     </div>
                     <Button
@@ -225,7 +296,9 @@ export default function EmailDetail({ emailId, onToggleStar }: EmailDetailProps)
           <div
             className="text-gray-300 leading-relaxed"
             dangerouslySetInnerHTML={{
-              __html: email.is_html ? email.body : `<pre class="whitespace-pre-wrap">${email.body}</pre>`,
+              __html: email.is_html
+                ? email.body
+                : `<pre class="whitespace-pre-wrap">${email.body}</pre>`,
             }}
           />
         </div>

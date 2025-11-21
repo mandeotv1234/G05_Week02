@@ -11,21 +11,27 @@ import (
 
 func AuthMiddleware(authUsecase usecase.AuthUsecase) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		token := ""
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization header required"})
+
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				token = parts[1]
+			}
+		}
+
+		// Fallback to query parameter (useful for SSE)
+		if token == "" {
+			token = c.Query("token")
+		}
+
+		if token == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization header or token query parameter required"})
 			c.Abort()
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header format"})
-			c.Abort()
-			return
-		}
-
-		token := parts[1]
 		user, err := authUsecase.ValidateToken(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
@@ -34,6 +40,7 @@ func AuthMiddleware(authUsecase usecase.AuthUsecase) gin.HandlerFunc {
 		}
 
 		c.Set("user", user)
+		c.Set("userID", user.ID)
 		c.Next()
 	}
 }

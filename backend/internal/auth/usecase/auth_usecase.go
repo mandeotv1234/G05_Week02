@@ -1,11 +1,13 @@
 package usecase
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	authdomain "ga03-backend/internal/auth/domain"
@@ -15,6 +17,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 )
 
 // authUsecase implements AuthUsecase interface
@@ -81,37 +85,65 @@ func (u *authUsecase) Register(req *authdto.RegisterRequest) (*authdto.TokenResp
 	return u.generateTokens(user)
 }
 
-// GoogleTokenInfo represents the response from Google's tokeninfo endpoint
+// GoogleTokenInfo represents the response from Google's userinfo endpoint
 type GoogleTokenInfo struct {
 	Email         string `json:"email"`
 	Name          string `json:"name"`
 	Picture       string `json:"picture"`
-	EmailVerified string `json:"email_verified"` // Google returns this as string "true" or "false"
+	EmailVerified bool   `json:"email_verified"`
 	Sub           string `json:"sub"`
 }
 
-func (u *authUsecase) GoogleSignIn(idToken string) (*authdto.TokenResponse, error) {
-	// Verify ID token by calling Google's tokeninfo endpoint
-	url := fmt.Sprintf("https://oauth2.googleapis.com/tokeninfo?id_token=%s", idToken)
+func (u *authUsecase) GoogleSignIn(code string, scope []string) (*authdto.TokenResponse, error) {
+	conf := &oauth2.Config{
+        ClientID:     u.config.GoogleClientID,
+        ClientSecret: u.config.GoogleClientSecret,
+        RedirectURL:  "postmessage", 
+        Scopes:      scope,
+        Endpoint: google.Endpoint,
+    }
+	token, err := conf.Exchange(context.Background(), code)
+    if err != nil {
+        return nil, fmt.Errorf("google oauth exchange failed: %v", err)
+    }
+	accessToken := token.AccessToken
+    refreshToken := token.RefreshToken
+	tokenExpiry := token.Expiry
 
-	resp, err := http.Get(url)
+	url := "https://www.googleapis.com/oauth2/v3/userinfo"
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, errors.New("failed to create request: " + err.Error())
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, errors.New("failed to verify Google token: " + err.Error())
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to verify Google token: status %d, body: %s", resp.StatusCode, string(body))
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.New("failed to read response body: " + err.Error())
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		errMsg := fmt.Sprintf("failed to verify Google token: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+		fmt.Println("Error:", errMsg)
+		return nil, errors.New(errMsg)
+	}
+
+	fmt.Printf("Google UserInfo Response: %s\n", string(bodyBytes))
+
 	var tokenInfo GoogleTokenInfo
-	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
+	if err := json.Unmarshal(bodyBytes, &tokenInfo); err != nil {
 		return nil, errors.New("failed to decode Google token info: " + err.Error())
 	}
 
 	// Verify that email is verified (Google returns "true" as string)
-	if tokenInfo.EmailVerified != "true" {
+	if tokenInfo.EmailVerified != true {
 		return nil, errors.New("google email is not verified")
 	}
 
@@ -124,24 +156,41 @@ func (u *authUsecase) GoogleSignIn(idToken string) (*authdto.TokenResponse, erro
 	if user == nil {
 		// Create new user
 		user = &authdomain.User{
-			Email:     tokenInfo.Email,
-			Name:      tokenInfo.Name,
-			AvatarURL: tokenInfo.Picture,
-			Provider:  "google",
+			Email:        tokenInfo.Email,
+			Name:         tokenInfo.Name,
+			AvatarURL:    tokenInfo.Picture,
+			Provider:     "google",
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			TokenExpiry: tokenExpiry,
 		}
 		if err := u.userRepo.Create(user); err != nil {
+			fmt.Printf("Error creating user: %v\n", err)
 			return nil, err
 		}
+		fmt.Println("User created successfully")
 	} else {
-		// Update existing user info
+		fmt.Println("Updating existing user...")
+		// Update existing user info and tokens
 		user.Name = tokenInfo.Name
 		user.AvatarURL = tokenInfo.Picture
+		user.AccessToken = accessToken
+		user.RefreshToken = refreshToken
 		if err := u.userRepo.Update(user); err != nil {
+			fmt.Printf("Error updating user: %v\n", err)
 			return nil, err
 		}
+		fmt.Println("User updated successfully")
 	}
 
-	return u.generateTokens(user)
+	fmt.Println("Generating tokens...")
+	tokenResp, err := u.generateTokens(user)
+	if err != nil {
+		fmt.Printf("Error generating tokens: %v\n", err)
+		return nil, err
+	}
+	fmt.Println("Tokens generated successfully")
+	return tokenResp, nil
 }
 
 func (u *authUsecase) RefreshToken(refreshToken string) (*authdto.TokenResponse, error) {
@@ -188,6 +237,33 @@ func (u *authUsecase) RefreshToken(refreshToken string) (*authdto.TokenResponse,
 }
 
 func (u *authUsecase) Logout(refreshToken string) error {
+	// Find the refresh token to identify the user
+	token, err := u.userRepo.FindRefreshToken(refreshToken)
+	if err != nil {
+		return err
+	}
+
+	if token != nil {
+		// Get the user to check for Google OAuth
+		user, err := u.userRepo.FindByID(token.UserID)
+		if err == nil && user != nil && user.Provider == "google" && user.RefreshToken != "" {
+			// Revoke Google token
+			revokeURL := "https://oauth2.googleapis.com/revoke"
+			resp, err := http.PostForm(revokeURL, url.Values{"token": {user.RefreshToken}})
+			if err != nil {
+				fmt.Printf("Failed to revoke Google token: %v\n", err)
+			} else {
+				resp.Body.Close()
+
+				// Clear Google tokens from user record
+				user.AccessToken = ""
+				user.RefreshToken = ""
+				user.TokenExpiry = time.Time{}
+				u.userRepo.Update(user)
+			}
+		}
+	}
+
 	return u.userRepo.DeleteRefreshToken(refreshToken)
 }
 

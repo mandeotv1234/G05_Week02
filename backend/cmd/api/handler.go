@@ -4,6 +4,7 @@ import (
 	authUsecase "ga03-backend/internal/auth/usecase"
 	emailUsecase "ga03-backend/internal/email/usecase"
 	"ga03-backend/pkg/config"
+	"ga03-backend/pkg/sse"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,13 +12,15 @@ import (
 type Handler struct {
 	authUsecase  authUsecase.AuthUsecase
 	emailUsecase emailUsecase.EmailUsecase
+	sseManager   *sse.Manager
 	config       *config.Config
 }
 
-func NewHandler(authUsecase authUsecase.AuthUsecase, emailUsecase emailUsecase.EmailUsecase, cfg *config.Config) *Handler {
+func NewHandler(authUsecase authUsecase.AuthUsecase, emailUsecase emailUsecase.EmailUsecase, sseManager *sse.Manager, cfg *config.Config) *Handler {
 	return &Handler{
 		authUsecase:  authUsecase,
 		emailUsecase: emailUsecase,
+		sseManager:   sseManager,
 		config:       cfg,
 	}
 }
@@ -28,7 +31,13 @@ func (h *Handler) Start(addr string) error {
 
 	// CORS middleware
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		if origin != "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+		
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
@@ -42,7 +51,7 @@ func (h *Handler) Start(addr string) error {
 	})
 
 	// Setup routes
-	SetupRoutes(r, h.authUsecase, h.emailUsecase, h.config)
+	SetupRoutes(r, h.authUsecase, h.emailUsecase, h.sseManager, h.config)
 
 	return r.Run(addr)
 }

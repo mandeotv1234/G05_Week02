@@ -1,31 +1,78 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"strings"
 
 	api "ga03-backend/cmd/api"
+	authdomain "ga03-backend/internal/auth/domain"
 	authRepo "ga03-backend/internal/auth/repository"
 	authUsecase "ga03-backend/internal/auth/usecase"
 	emailRepo "ga03-backend/internal/email/repository"
 	emailUsecase "ga03-backend/internal/email/usecase"
+	"ga03-backend/internal/notification"
 	"ga03-backend/pkg/config"
+	"ga03-backend/pkg/database"
+	"ga03-backend/pkg/gmail"
+	"ga03-backend/pkg/sse"
 )
 
 func main() {
 	// Load configuration
 	cfg := config.Load()
 
+	// Initialize database
+	db, err := database.NewPostgresConnection(cfg)
+	if err != nil {
+		log.Fatal("Failed to connect to database:", err)
+	}
+
+	// Auto-migrate database schemas
+	if err := db.AutoMigrate(&authdomain.User{}, &authdomain.RefreshToken{}); err != nil {
+		log.Fatal("Failed to migrate database:", err)
+	}
+
 	// Initialize repositories (dependency injection)
-	userRepo := authRepo.NewUserRepository()
+	userRepo := authRepo.NewUserRepository(db)
 	emailRepository := emailRepo.NewEmailRepository()
+
+	// Initialize SSE Manager
+	sseManager := sse.NewManager()
+	go sseManager.Run()
+
+	// Initialize Notification Service (Pub/Sub)
+	// Only start if project ID is configured
+	if cfg.GoogleProjectID != "" {
+		// Extract short topic name from full resource name if necessary
+		topicName := cfg.GooglePubSubTopic
+		if parts := strings.Split(topicName, "/"); len(parts) > 1 {
+			topicName = parts[len(parts)-1]
+		}
+		if topicName == "" {
+			topicName = "gmail-updates"
+		}
+
+		notifService, err := notification.NewService(cfg.GoogleProjectID, topicName, sseManager, userRepo, cfg.GoogleCredentials)
+		if err != nil {
+			log.Printf("Failed to initialize notification service: %v", err)
+		} else {
+			go notifService.Start(context.Background())
+		}
+	}
+
+	// Initialize Gmail service
+	gmailService := gmail.NewService(cfg.GoogleClientID, cfg.GoogleClientSecret)
 
 	// Initialize use cases (dependency injection)
 	authUsecaseInstance := authUsecase.NewAuthUsecase(userRepo, cfg)
-	emailUsecaseInstance := emailUsecase.NewEmailUsecase(emailRepository)
+	emailUsecaseInstance := emailUsecase.NewEmailUsecase(emailRepository, userRepo, gmailService, cfg.GooglePubSubTopic)
 
 	// Initialize HTTP handler
-	handler := api.NewHandler(authUsecaseInstance, emailUsecaseInstance, cfg)
+	handler := api.NewHandler(authUsecaseInstance, emailUsecaseInstance, sseManager, cfg)
+
+	// Start server
 
 	// Start server
 	port := os.Getenv("PORT")

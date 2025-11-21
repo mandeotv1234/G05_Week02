@@ -1,102 +1,82 @@
 package repository
 
 import (
-	"sync"
+	"errors"
 	"time"
 
 	authdomain "ga03-backend/internal/auth/domain"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // userRepository implements UserRepository interface
 type userRepository struct {
-	users         map[string]*authdomain.User
-	refreshTokens map[string]*authdomain.RefreshToken
-	mu            sync.RWMutex
+	db *gorm.DB
 }
 
 // NewUserRepository creates a new instance of userRepository
-func NewUserRepository() UserRepository {
+func NewUserRepository(db *gorm.DB) UserRepository {
 	return &userRepository{
-		users:         make(map[string]*authdomain.User),
-		refreshTokens: make(map[string]*authdomain.RefreshToken),
+		db: db,
 	}
 }
 
 func (r *userRepository) Create(user *authdomain.User) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	user.ID = uuid.New().String()
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
-	r.users[user.ID] = user
-	return nil
+	return r.db.Create(user).Error
 }
 
 func (r *userRepository) FindByEmail(email string) (*authdomain.User, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	for _, user := range r.users {
-		if user.Email == email {
-			return user, nil
+	var user authdomain.User
+	err := r.db.Where("email = ?", email).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
 		}
+		return nil, err
 	}
-	return nil, nil
+	return &user, nil
 }
 
 func (r *userRepository) FindByID(id string) (*authdomain.User, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	user, exists := r.users[id]
-	if !exists {
-		return nil, nil
+	var user authdomain.User
+	err := r.db.Where("id = ?", id).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	return user, nil
+	return &user, nil
 }
 
 func (r *userRepository) Update(user *authdomain.User) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, exists := r.users[user.ID]; !exists {
-		return nil
-	}
-
 	user.UpdatedAt = time.Now()
-	r.users[user.ID] = user
-	return nil
+	return r.db.Save(user).Error
 }
 
 func (r *userRepository) SaveRefreshToken(token *authdomain.RefreshToken) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.refreshTokens[token.Token] = token
-	return nil
+	return r.db.Create(token).Error
 }
 
 func (r *userRepository) FindRefreshToken(token string) (*authdomain.RefreshToken, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	refreshToken, exists := r.refreshTokens[token]
-	if !exists {
-		return nil, nil
+	var refreshToken authdomain.RefreshToken
+	err := r.db.Where("token = ?", token).First(&refreshToken).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	return refreshToken, nil
+	return &refreshToken, nil
 }
 
 func (r *userRepository) DeleteRefreshToken(token string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	delete(r.refreshTokens, token)
-	return nil
+	return r.db.Where("token = ?", token).Delete(&authdomain.RefreshToken{}).Error
 }
 
 // HashPassword hashes a password using bcrypt

@@ -14,7 +14,8 @@ type RegisterRequest struct {
 }
 
 type GoogleSignInRequest struct {
-	Token string `json:"token" binding:"required"`
+	Code        string `json:"code" binding:"required"`
+	Scope       []string `json:"scope" binding:"required"`
 }
 
 type RefreshTokenRequest struct {

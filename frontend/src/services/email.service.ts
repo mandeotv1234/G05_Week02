@@ -1,9 +1,11 @@
-import apiClient from '@/lib/api-client';
-import type { Mailbox, Email, EmailsResponse } from '@/types/email';
+import apiClient from "@/lib/api-client";
+import type { Mailbox, Email, EmailsResponse } from "@/types/email";
 
 export const emailService = {
   getAllMailboxes: async (): Promise<Mailbox[]> => {
-    const response = await apiClient.get<{ mailboxes: Mailbox[] }>('/emails/mailboxes');
+    const response = await apiClient.get<{ mailboxes: Mailbox[] }>(
+      "/emails/mailboxes"
+    );
     return response.data.mailboxes;
   },
 
@@ -39,5 +41,24 @@ export const emailService = {
     const response = await apiClient.patch<Email>(`/emails/${id}/star`);
     return response.data;
   },
-};
 
+  sendEmail: async (
+    to: string,
+    subject: string,
+    body: string
+  ): Promise<void> => {
+    await apiClient.post("/emails/send", { to, subject, body });
+  },
+
+  trashEmail: async (id: string): Promise<void> => {
+    await apiClient.post(`/emails/${id}/trash`);
+  },
+
+  archiveEmail: async (id: string): Promise<void> => {
+    await apiClient.post(`/emails/${id}/archive`);
+  },
+
+  watchMailbox: async (): Promise<void> => {
+    await apiClient.post("/emails/watch");
+  },
+};

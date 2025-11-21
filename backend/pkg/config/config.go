@@ -15,6 +15,15 @@ type Config struct {
 	GoogleClientID      string
 	GoogleClientSecret  string
 	GoogleRedirectURI   string
+	GoogleProjectID     string
+	GooglePubSubTopic   string
+	GoogleCredentials   string // Path to service account JSON
+	DBHost              string
+	DBPort              string
+	DBUser              string
+	DBPassword          string
+	DBName              string
+	DBSSLMode           string
 }
 
 func Load() *Config {
@@ -40,9 +49,18 @@ func Load() *Config {
 		JWTSecret:          getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
 		JWTAccessExpiry:    accessExpiry,
 		JWTRefreshExpiry:   refreshExpiry,
-		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
-		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
-		GoogleRedirectURI:  getEnv("GOOGLE_REDIRECT_URI", "http://localhost:8080/api/auth/google/callback"),
+		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		GoogleRedirectURI:  os.Getenv("GOOGLE_REDIRECT_URI"),
+		GoogleProjectID:    getEnv("GOOGLE_PROJECT_ID", "gomailclient"),
+		GooglePubSubTopic:  getEnv("GOOGLE_PUBSUB_TOPIC", "projects/gomailclient/topics/gmail-updates"),
+		GoogleCredentials:  os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+		DBHost:             os.Getenv("DB_HOST"),
+		DBPort:             getEnv("DB_PORT", "5432"),
+		DBUser:             getEnv("DB_USER", "postgres"),
+		DBPassword:         getEnv("DB_PASSWORD", "postgres"),
+		DBName:             getEnv("DB_NAME", "email_dashboard"),
+		DBSSLMode:          getEnv("DB_SSLMODE", "disable"),
 	}
 }
 

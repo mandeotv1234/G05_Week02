@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { emailService } from "@/services/email.service";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   X,
   Minimize2,
@@ -22,47 +24,98 @@ import {
   ListOrdered,
   Link as LinkIcon,
   Image as ImageIcon,
-} from 'lucide-react';
+  Loader2,
+} from "lucide-react";
 
 interface ComposeEmailProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialSubject?: string;
+  initialBody?: string;
 }
 
-export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) {
+export default function ComposeEmail({
+  open,
+  onOpenChange,
+  initialSubject = "",
+  initialBody = "",
+}: ComposeEmailProps) {
+  const queryClient = useQueryClient();
   const [to, setTo] = useState<string[]>([]);
-  const [toInput, setToInput] = useState('');
+  const [toInput, setToInput] = useState("");
   const [showCc, setShowCc] = useState(false);
   const [showBcc, setShowBcc] = useState(false);
   const [cc, setCc] = useState<string[]>([]);
-  const [ccInput, setCcInput] = useState('');
+  const [ccInput, setCcInput] = useState("");
   const [bcc, setBcc] = useState<string[]>([]);
-  const [bccInput, setBccInput] = useState('');
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  const [bccInput, setBccInput] = useState("");
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState(initialBody);
+
+  useEffect(() => {
+    if (open) {
+      setSubject(initialSubject);
+      setBody(initialBody);
+    }
+  }, [open, initialSubject, initialBody]);
+
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isMinimized, setIsMinimized] = useState(false);
 
-  const handleAddRecipient = (value: string, type: 'to' | 'cc' | 'bcc') => {
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      // Combine all recipients
+      const allTo = [...to];
+      if (toInput.trim()) allTo.push(toInput.trim());
+
+      if (allTo.length === 0) {
+        throw new Error("Please add at least one recipient");
+      }
+
+      // For now, we only support sending to the 'to' list as a comma-separated string
+      // Backend needs to be updated to handle CC/BCC if required
+      await emailService.sendEmail(allTo.join(", "), subject, body);
+    },
+    onSuccess: () => {
+      onOpenChange(false);
+      // Reset form
+      setTo([]);
+      setToInput("");
+      setCc([]);
+      setBcc([]);
+      setSubject("");
+      setBody("");
+      setAttachments([]);
+      // Invalidate queries to refresh lists
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["mailboxes"] });
+    },
+    onError: (error) => {
+      console.error("Failed to send email:", error);
+      alert("Failed to send email. Please try again.");
+    },
+  });
+
+  const handleAddRecipient = (value: string, type: "to" | "cc" | "bcc") => {
     if (!value.trim()) return;
 
     const email = value.trim();
-    if (type === 'to') {
+    if (type === "to") {
       setTo([...to, email]);
-      setToInput('');
-    } else if (type === 'cc') {
+      setToInput("");
+    } else if (type === "cc") {
       setCc([...cc, email]);
-      setCcInput('');
+      setCcInput("");
     } else {
       setBcc([...bcc, email]);
-      setBccInput('');
+      setBccInput("");
     }
   };
 
-  const handleRemoveRecipient = (email: string, type: 'to' | 'cc' | 'bcc') => {
-    if (type === 'to') {
+  const handleRemoveRecipient = (email: string, type: "to" | "cc" | "bcc") => {
+    if (type === "to") {
       setTo(to.filter((e) => e !== email));
-    } else if (type === 'cc') {
+    } else if (type === "cc") {
       setCc(cc.filter((e) => e !== email));
     } else {
       setBcc(bcc.filter((e) => e !== email));
@@ -71,9 +124,9 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
 
   const handleKeyDown = (
     e: React.KeyboardEvent<HTMLInputElement>,
-    type: 'to' | 'cc' | 'bcc'
+    type: "to" | "cc" | "bcc"
   ) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       const value = (e.target as HTMLInputElement).value;
       handleAddRecipient(value, type);
@@ -81,8 +134,8 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
   };
 
   const handleAddAttachment = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
+    const input = document.createElement("input");
+    input.type = "file";
     input.multiple = true;
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files;
@@ -99,16 +152,7 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
   };
 
   const handleSend = () => {
-    // TODO: Implement send email
-    console.log('Sending email:', { to, cc, bcc, subject, body, attachments });
-    onOpenChange(false);
-    // Reset form
-    setTo([]);
-    setCc([]);
-    setBcc([]);
-    setSubject('');
-    setBody('');
-    setAttachments([]);
+    sendMutation.mutate();
   };
 
   const handleDiscard = () => {
@@ -116,8 +160,8 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
     setTo([]);
     setCc([]);
     setBcc([]);
-    setSubject('');
-    setBody('');
+    setSubject("");
+    setBody("");
     setAttachments([]);
   };
 
@@ -126,7 +170,9 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
       <DialogContent className="max-w-3xl w-full h-[90vh] flex flex-col bg-gray-800 border-gray-700 text-white p-0">
         {/* Window Controls */}
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
-          <DialogTitle className="text-lg font-semibold">New Message</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">
+            New Message
+          </DialogTitle>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -134,7 +180,11 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
               className="h-6 w-6 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
               onClick={() => setIsMinimized(!isMinimized)}
             >
-              {isMinimized ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+              {isMinimized ? (
+                <Maximize2 className="h-4 w-4" />
+              ) : (
+                <Minimize2 className="h-4 w-4" />
+              )}
             </Button>
             <Button
               variant="ghost"
@@ -162,7 +212,7 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
                       >
                         {email}
                         <button
-                          onClick={() => handleRemoveRecipient(email, 'to')}
+                          onClick={() => handleRemoveRecipient(email, "to")}
                           className="hover:bg-gray-600 rounded-full p-0.5"
                         >
                           <X className="h-3 w-3" />
@@ -173,11 +223,11 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
                       type="text"
                       value={toInput}
                       onChange={(e) => setToInput(e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(e, 'to')}
+                      onKeyDown={(e) => handleKeyDown(e, "to")}
                       onBlur={() => {
-                        if (toInput.trim()) handleAddRecipient(toInput, 'to');
+                        if (toInput.trim()) handleAddRecipient(toInput, "to");
                       }}
-                      placeholder={to.length === 0 ? 'Add recipients' : ''}
+                      placeholder={to.length === 0 ? "Add recipients" : ""}
                       className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-white placeholder-gray-500"
                     />
                   </div>
@@ -209,7 +259,7 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
                         >
                           {email}
                           <button
-                            onClick={() => handleRemoveRecipient(email, 'cc')}
+                            onClick={() => handleRemoveRecipient(email, "cc")}
                             className="hover:bg-gray-600 rounded-full p-0.5"
                           >
                             <X className="h-3 w-3" />
@@ -220,9 +270,9 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
                         type="text"
                         value={ccInput}
                         onChange={(e) => setCcInput(e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, 'cc')}
+                        onKeyDown={(e) => handleKeyDown(e, "cc")}
                         onBlur={() => {
-                          if (ccInput.trim()) handleAddRecipient(ccInput, 'cc');
+                          if (ccInput.trim()) handleAddRecipient(ccInput, "cc");
                         }}
                         placeholder="Add recipients"
                         className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-white placeholder-gray-500"
@@ -243,7 +293,7 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
                         >
                           {email}
                           <button
-                            onClick={() => handleRemoveRecipient(email, 'bcc')}
+                            onClick={() => handleRemoveRecipient(email, "bcc")}
                             className="hover:bg-gray-600 rounded-full p-0.5"
                           >
                             <X className="h-3 w-3" />
@@ -254,9 +304,10 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
                         type="text"
                         value={bccInput}
                         onChange={(e) => setBccInput(e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, 'bcc')}
+                        onKeyDown={(e) => handleKeyDown(e, "bcc")}
                         onBlur={() => {
-                          if (bccInput.trim()) handleAddRecipient(bccInput, 'bcc');
+                          if (bccInput.trim())
+                            handleAddRecipient(bccInput, "bcc");
                         }}
                         placeholder="Add recipients"
                         className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-white placeholder-gray-500"
@@ -378,9 +429,14 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
               <div className="flex items-center gap-2">
                 <Button
                   onClick={handleSend}
+                  disabled={sendMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
-                  <Send className="h-4 w-4 mr-2" />
+                  {sendMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4 mr-2" />
+                  )}
                   Send
                 </Button>
                 <Button
@@ -410,4 +466,3 @@ export default function ComposeEmail({ open, onOpenChange }: ComposeEmailProps) 
     </Dialog>
   );
 }
-

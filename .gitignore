@@ -34,3 +34,5 @@ dist-ssr
 go.work
 vendor/
 
+backend/service-account.json
+frontend/.vscode/mcp.json

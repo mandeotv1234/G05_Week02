@@ -1,9 +1,11 @@
 package delivery
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
+	authdomain "ga03-backend/internal/auth/domain"
 	emaildto "ga03-backend/internal/email/dto"
 	"ga03-backend/internal/email/usecase"
 
@@ -21,7 +23,21 @@ func NewEmailHandler(emailUsecase usecase.EmailUsecase) *EmailHandler {
 }
 
 func (h *EmailHandler) GetAllMailboxes(c *gin.Context) {
-	mailboxes, err := h.emailUsecase.GetAllMailboxes()
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	
+	userID := userData.ID
+	
+	mailboxes, err := h.emailUsecase.GetAllMailboxes(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -49,6 +65,20 @@ func (h *EmailHandler) GetMailboxByID(c *gin.Context) {
 func (h *EmailHandler) GetEmailsByMailbox(c *gin.Context) {
 	mailboxID := c.Param("id")
 
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	
+	userID := userData.ID
+
 	limit := 20
 	offset := 0
 
@@ -64,7 +94,7 @@ func (h *EmailHandler) GetEmailsByMailbox(c *gin.Context) {
 		}
 	}
 
-	emails, total, err := h.emailUsecase.GetEmailsByMailbox(mailboxID, limit, offset)
+	emails, total, err := h.emailUsecase.GetEmailsByMailbox(userID, mailboxID, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -80,7 +110,22 @@ func (h *EmailHandler) GetEmailsByMailbox(c *gin.Context) {
 
 func (h *EmailHandler) GetEmailByID(c *gin.Context) {
 	id := c.Param("id")
-	email, err := h.emailUsecase.GetEmailByID(id)
+	
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	
+	userID := userData.ID
+	
+	email, err := h.emailUsecase.GetEmailByID(userID, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -92,14 +137,29 @@ func (h *EmailHandler) GetEmailByID(c *gin.Context) {
 	}
 
 	// Mark as read when viewing
-	_ = h.emailUsecase.MarkEmailAsRead(id)
+	_ = h.emailUsecase.MarkEmailAsRead(userID, id)
 
 	c.JSON(http.StatusOK, email)
 }
 
 func (h *EmailHandler) MarkAsRead(c *gin.Context) {
 	id := c.Param("id")
-	if err := h.emailUsecase.MarkEmailAsRead(id); err != nil {
+	
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	
+	userID := userData.ID
+	
+	if err := h.emailUsecase.MarkEmailAsRead(userID, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -109,12 +169,134 @@ func (h *EmailHandler) MarkAsRead(c *gin.Context) {
 
 func (h *EmailHandler) ToggleStar(c *gin.Context) {
 	id := c.Param("id")
-	if err := h.emailUsecase.ToggleStar(id); err != nil {
+	
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	
+	userID := userData.ID
+	
+	if err := h.emailUsecase.ToggleStar(userID, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	email, _ := h.emailUsecase.GetEmailByID(id)
-	c.JSON(http.StatusOK, email)
+	c.JSON(http.StatusOK, gin.H{"message": "email star toggled"})
+}
+
+func (h *EmailHandler) SendEmail(c *gin.Context) {
+	var req emaildto.SendEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	
+	userID := userData.ID
+
+	if err := h.emailUsecase.SendEmail(userID, req.To, req.Subject, req.Body); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "email sent successfully"})
+}
+
+func (h *EmailHandler) TrashEmail(c *gin.Context) {
+	id := c.Param("id")
+	
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	
+	userID := userData.ID
+
+	if err := h.emailUsecase.TrashEmail(userID, id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "email moved to trash"})
+}
+
+func (h *EmailHandler) ArchiveEmail(c *gin.Context) {
+	id := c.Param("id")
+	
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	
+	userID := userData.ID
+
+	if err := h.emailUsecase.ArchiveEmail(userID, id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "email archived"})
+}
+
+func (h *EmailHandler) WatchMailbox(c *gin.Context) {
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	
+	userID := userData.ID
+	
+	// Log the watch request
+	log.Printf("Received watch request for user: %s", userID)
+
+	err := h.emailUsecase.WatchMailbox(userID)
+	if err != nil {
+		log.Printf("Failed to watch mailbox for user %s: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Printf("Successfully started watching mailbox for user: %s", userID)
+	c.JSON(http.StatusOK, gin.H{"message": "watch started"})
 }
 

@@ -58,7 +58,7 @@ func (h *AuthHandler) GoogleSignIn(c *gin.Context) {
 		return
 	}
 
-	result, err := h.authUsecase.GoogleSignIn(req.Token)
+	result, err := h.authUsecase.GoogleSignIn(req.Code, req.Scope)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return

@@ -6,16 +6,23 @@ import (
 	emailDelivery "ga03-backend/internal/email/delivery"
 	emailUsecase "ga03-backend/internal/email/usecase"
 	"ga03-backend/pkg/config"
+	"ga03-backend/pkg/sse"
 
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine, authUsecase authUsecase.AuthUsecase, emailUsecase emailUsecase.EmailUsecase, cfg *config.Config) {
+func SetupRoutes(r *gin.Engine, authUsecase authUsecase.AuthUsecase, emailUsecase emailUsecase.EmailUsecase, sseManager *sse.Manager, cfg *config.Config) {
 	authHandler := delivery.NewAuthHandler(authUsecase)
 	emailHandler := emailDelivery.NewEmailHandler(emailUsecase)
 
 	api := r.Group("/api")
 	{
+		// SSE endpoint
+		api.GET("/events", delivery.AuthMiddleware(authUsecase), func(c *gin.Context) {
+			userID := c.GetString("userID")
+			sseManager.ServeHTTP(c, userID)
+		})
+
 		// Auth routes
 		auth := api.Group("/auth")
 		{
@@ -37,6 +44,10 @@ func SetupRoutes(r *gin.Engine, authUsecase authUsecase.AuthUsecase, emailUsecas
 			emails.GET("/:id", emailHandler.GetEmailByID)
 			emails.PATCH("/:id/read", emailHandler.MarkAsRead)
 			emails.PATCH("/:id/star", emailHandler.ToggleStar)
+			emails.POST("/send", emailHandler.SendEmail)
+			emails.POST("/:id/trash", emailHandler.TrashEmail)
+			emails.POST("/:id/archive", emailHandler.ArchiveEmail)
+			emails.POST("/watch", emailHandler.WatchMailbox)
 		}
 	}
 }
