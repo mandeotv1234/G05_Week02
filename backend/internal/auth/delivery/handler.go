@@ -32,7 +32,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetSameSite(http.SameSiteNoneMode)
 	c.SetCookie("refresh_token", result.RefreshToken, 7*24*3600, "/", "", true, true)
 	result.RefreshToken = ""
 
@@ -52,7 +52,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetSameSite(http.SameSiteNoneMode)
 	c.SetCookie("refresh_token", result.RefreshToken, 7*24*3600, "/", "", true, true)
 	result.RefreshToken = ""
 
@@ -72,7 +72,7 @@ func (h *AuthHandler) GoogleSignIn(c *gin.Context) {
 		return
 	}
 
-	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetSameSite(http.SameSiteNoneMode)
 	c.SetCookie("refresh_token", result.RefreshToken, 7*24*3600, "/", "", true, true)
 	result.RefreshToken = ""
 
@@ -99,7 +99,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetSameSite(http.SameSiteNoneMode)
 	c.SetCookie("refresh_token", result.RefreshToken, 7*24*3600, "/", "", true, true)
 	result.RefreshToken = ""
 
@@ -130,7 +130,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		_ = h.authUsecase.Logout(refreshToken)
 	}
 
-	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetSameSite(http.SameSiteNoneMode)
 	c.SetCookie("refresh_token", "", -1, "/", "", true, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
