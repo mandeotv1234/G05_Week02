@@ -11,6 +11,7 @@ import EmailList from "@/components/inbox/EmailList";
 import EmailDetail from "@/components/inbox/EmailDetail";
 import ComposeEmail from "@/components/inbox/ComposeEmail";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { API_BASE_URL } from "@/config/api";
 
 export default function InboxPage() {
   const navigate = useNavigate();
@@ -77,9 +78,7 @@ export default function InboxPage() {
       // Connect to SSE
       const token = getAccessToken();
       const eventSource = new EventSource(
-        `${
-          import.meta.env.VITE_API_URL || "http://localhost:8080"
-        }/api/events?token=${token}`,
+        `${API_BASE_URL}/events?token=${token}`,
         {
           withCredentials: true,
         }
