@@ -1,39 +1,32 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { emailService } from "@/services/email.service";
-import { Button } from "@/components/ui/button";
-import {
-  Star,
-  StarOff,
-  Reply,
-  ReplyAll,
-  Forward,
-  Trash2,
-  Archive,
-  ChevronLeft,
-  ChevronRight,
-  MoreVertical,
-  Mail,
-  Download,
-  FileText,
-  Image as ImageIcon,
-} from "lucide-react";
 import { format } from "date-fns";
-import type { Email } from "@/types/email";
+import type { Email, Attachment } from "@/types/email";
 import { API_BASE_URL } from "@/config/api";
 import { getAccessToken } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/store/hooks";
+import { toast } from "sonner";
 
 interface EmailDetailProps {
   emailId: string | null;
   onToggleStar: (emailId: string) => void;
+  onReply?: (email: Email) => void;
+  onReplyAll?: (email: Email) => void;
   onForward?: (email: Email) => void;
+  theme: "light" | "dark";
 }
 
 export default function EmailDetail({
   emailId,
   onToggleStar,
+  onReply,
+  onReplyAll,
   onForward,
+  theme,
 }: EmailDetailProps) {
   const queryClient = useQueryClient();
+  const { user } = useAppSelector((state) => state.auth);
 
   const { data: email, isLoading } = useQuery<Email>({
     queryKey: ["email", emailId],
@@ -47,15 +40,19 @@ export default function EmailDetail({
       queryClient.invalidateQueries({ queryKey: ["email", emailId] });
       queryClient.invalidateQueries({ queryKey: ["emails"] });
     },
+    onError: () => {
+      toast.error("Failed to toggle star status.");
+    }
   });
 
   const trashMutation = useMutation({
     mutationFn: emailService.trashEmail,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["emails"] });
-      // Maybe navigate back or clear selection?
-      // For now just invalidate
     },
+    onError: () => {
+      toast.error("Failed to move email to trash.");
+    }
   });
 
   const archiveMutation = useMutation({
@@ -92,16 +89,35 @@ export default function EmailDetail({
     }
   };
 
+  const handleMarkAsUnread = () => {
+    if (emailId) {
+      markAsUnreadMutation.mutate(emailId);
+    }
+  };
+
+  const handleReply = () => {
+    if (email && onReply) {
+      onReply(email);
+    }
+  };
+
+  const handleReplyAll = () => {
+    if (email && onReplyAll) {
+      onReplyAll(email);
+    }
+  };
+
   const handleForward = () => {
     if (email && onForward) {
       onForward(email);
     }
   };
 
-  const handleDownloadAttachment = (attachmentId: string, filename: string) => {
+  const handleDownloadAttachment = async (
+    attachmentId: string,
+    filename: string
+  ) => {
     if (!emailId) return;
-
-    // Construct download URL
     const token = getAccessToken();
     const url = `${API_BASE_URL}/emails/${emailId}/attachments/${attachmentId}?token=${token}`;
 
@@ -114,21 +130,36 @@ export default function EmailDetail({
     document.body.removeChild(link);
   };
 
-  const handleMarkAsUnread = () => {
-    if (emailId) {
-      markAsUnreadMutation.mutate(emailId);
-    }
+  const processEmailBody = (body: string, attachments?: Attachment[]) => {
+    if (!attachments || attachments.length === 0) return body;
+
+    let processedBody = body;
+    const token = getAccessToken();
+
+    attachments.forEach((attachment) => {
+      if (attachment.content_id) {
+        const cid = `cid:${attachment.content_id}`;
+        const url = `${API_BASE_URL}/emails/${emailId}/attachments/${attachment.id}?token=${token}`;
+        processedBody = processedBody.split(cid).join(url);
+      }
+    });
+
+    return processedBody;
   };
 
   if (!emailId) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400 bg-gray-900">
+      <div className="flex items-center justify-center h-full text-gray-400 bg-white dark:bg-[#111418]">
         <div className="text-center">
-          <Mail className="h-20 w-20 mx-auto mb-4 text-gray-600" />
-          <p className="text-lg font-medium text-gray-300 mb-2">
+          <span className="material-symbols-outlined text-8xl text-gray-300 dark:text-gray-600 mb-4">
+            mail
+          </span>
+          <p className="text-lg font-medium text-gray-500 dark:text-gray-300 mb-2">
             Select an email to read
           </p>
-          <p className="text-sm text-gray-500">Nothing is selected.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500">
+            Nothing is selected.
+          </p>
         </div>
       </div>
     );
@@ -136,11 +167,11 @@ export default function EmailDetail({
 
   if (isLoading) {
     return (
-      <div className="w-full h-full bg-gray-900 p-6">
+      <div className="w-full h-full bg-white dark:bg-[#111418] p-6">
         <div className="space-y-4">
-          <div className="h-8 bg-gray-800 animate-pulse rounded w-3/4" />
-          <div className="h-4 bg-gray-800 animate-pulse rounded w-1/2" />
-          <div className="h-32 bg-gray-800 animate-pulse rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#283039] animate-pulse rounded w-3/4" />
+          <div className="h-4 bg-gray-100 dark:bg-[#283039] animate-pulse rounded w-1/2" />
+          <div className="h-32 bg-gray-100 dark:bg-[#283039] animate-pulse rounded" />
         </div>
       </div>
     );
@@ -148,10 +179,14 @@ export default function EmailDetail({
 
   if (!email) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400 bg-gray-900">
+      <div className="flex items-center justify-center h-full text-gray-400 bg-white dark:bg-[#111418]">
         <div className="text-center">
-          <Mail className="h-20 w-20 mx-auto mb-4 text-gray-600" />
-          <p className="text-lg font-medium text-gray-300">Email not found</p>
+          <span className="material-symbols-outlined text-8xl text-gray-300 dark:text-gray-600 mb-4">
+            error
+          </span>
+          <p className="text-lg font-medium text-gray-500 dark:text-gray-300">
+            Email not found
+          </p>
         </div>
       </div>
     );
@@ -174,9 +209,12 @@ export default function EmailDetail({
 
   const getFileIcon = (mimeType: string) => {
     if (mimeType.startsWith("image/")) {
-      return ImageIcon;
+      return "image";
     }
-    return FileText;
+    if (mimeType.includes("pdf")) {
+      return "picture_as_pdf";
+    }
+    return "description";
   };
 
   const formatFileSize = (bytes: number) => {
@@ -186,241 +224,290 @@ export default function EmailDetail({
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-900 text-white">
-      {/* Toolbar */}
-      <div className="p-4 border-b border-gray-700 bg-gray-800 flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-          onClick={() => onToggleStar(email.id)}
-          title={email.is_starred ? "Unstar" : "Star"}
-        >
-          {email.is_starred ? (
-            <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-          ) : (
-            <Star className="h-4 w-4" />
-          )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <Reply className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <ReplyAll className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-          onClick={handleForward}
-          title="Forward"
-        >
-          <Forward className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-          onClick={handleArchive}
-          title="Archive"
-        >
-          <Archive className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-          onClick={handleTrash}
-          title="Delete"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-          onClick={handleMarkAsUnread}
-          title="Mark as unread"
-        >
-          <Mail className="h-4 w-4" />
-        </Button>
-        <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <MoreVertical className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {/* Email Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {/* Subject */}
-        <h1 className="text-2xl font-bold text-white mb-6">{email.subject}</h1>
-
-        {/* Header */}
-        <div className="flex items-start gap-4 mb-6 pb-6 border-b border-gray-700">
-          <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-semibold text-sm">
-              {(email.from_name || email.from).charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <p className="text-white font-medium">
-                  {email.from_name || email.from}
-                </p>
-                <p className="text-sm text-gray-400">
-                  To: Me
-                  {email.to.length > 1
-                    ? `, ${email.to.slice(1).join(", ")}`
-                    : ""}
-                </p>
-              </div>
-              <span className="text-sm text-gray-400 flex-shrink-0 ml-4">
-                {getTimeDisplay(email.received_at)}
-              </span>
+    <div className="flex-1 flex flex-col bg-white dark:bg-[#111418] overflow-y-auto h-full scrollbar-thin">
+      <div className="flex flex-col md:h-full">
+        {/* Header*/}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 shrink-0 space-y-2">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
+            {email.subject}
+          </h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-0.5">
+              <button
+                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+                title="Trả lời"
+                onClick={handleReply}
+              >
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px]  [font-variation-settings:'wght'_300]">
+                  reply
+                </span>
+              </button>
+              <button
+                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+                title="Trả lời tất cả"
+                onClick={handleReplyAll}
+              >
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                  reply_all
+                </span>
+              </button>
+              <button
+                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+                title="Chuyển tiếp"
+                onClick={handleForward}
+              >
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                  forward
+                </span>
+              </button>
+              <button
+                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+                title="Lưu trữ"
+                onClick={handleArchive}
+              >
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px]  [font-variation-settings:'wght'_300]">
+                  archive
+                </span>
+              </button>
+              <button
+                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+                title="Đánh dấu chưa đọc"
+                onClick={handleMarkAsUnread}
+              >
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                  mark_email_unread
+                </span>
+              </button>
+              <button
+                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+                title="Xóa"
+                onClick={handleTrash}
+              >
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                  delete
+                </span>
+              </button>
+              <button
+                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+                title="Thêm"
+              >
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                  more_vert
+                </span>
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Attachments */}
-        {email.attachments && email.attachments.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-300 mb-3">
-              Attachments
-            </h3>
-            <div className="space-y-2">
-              {email.attachments.map((attachment) => {
-                const Icon = getFileIcon(attachment.mime_type);
-                return (
-                  <div
-                    key={attachment.id}
-                    className="flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-700"
+        {/* Content */}
+        <div className="flex-1 md:overflow-y-auto p-4 dark:bg-white">
+          {/* Sender Info */}
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-sm shrink-0">
+              {(email.from_name || email.from || "?")
+                .replace(/['"]/g, "")
+                .trim()
+                .charAt(0)
+                .toUpperCase()}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 text-sm flex flex-col md:flex-row md:items-center items-start gap-0 md:gap-2">
+                    <span>
+                      {(email.from_name || email.from)
+                        .replace(/<.*>/, "")
+                        .replace(/"/g, "")
+                        .trim()}
+                    </span>
+                    <span className="text-xs text-gray-500 font-normal">
+                      &lt;
+                      {email.from.match(/<([^>]+)>/)?.[1] ||
+                        (email.from.includes("@") ? email.from : "")}
+                      &gt;
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    To:{" "}
+                    {email.to.map((recipient, index) => (
+                      <span key={index}>
+                        {index > 0 && ", "}
+                        {user?.email && recipient.includes(user.email)
+                          ? "Me"
+                          : recipient}
+                      </span>
+                    ))}
+                  </p>
+                  <p className="text-xs text-gray-500 md:hidden mt-1">
+                    {getTimeDisplay(email.received_at)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className="hidden md:block">
+                    {getTimeDisplay(email.received_at)}
+                  </span>
+                  <button
+                    className="p-1 rounded-full hover:bg-gray-100"
+                    title="Bật/tắt dấu sao"
+                    onClick={handleToggleStar}
                   >
-                    <div className="flex items-center gap-3">
-                      <Icon className="h-5 w-5 text-gray-400" />
-                      <div>
-                        <p className="text-sm text-white">{attachment.name}</p>
-                        <p className="text-xs text-gray-400">
+                    <span
+                      className={cn(
+                        "material-symbols-outlined text-[18px]",
+                        email.is_starred ? "filled text-yellow-400" : ""
+                      )}
+                    >
+                      star
+                    </span>
+                  </button>
+                  <button
+                    className="p-1 rounded-full hover:bg-gray-100"
+                    title="Trả lời"
+                    onClick={handleReply}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      reply
+                    </span>
+                  </button>
+                  <button
+                    className="p-1 rounded-full hover:bg-gray-100"
+                    title="Khác"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      more_vert
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Email Body */}
+          <div className="prose prose-sm max-w-none text-gray-900 leading-relaxed mb-4">
+            {email.is_html ? (
+              <iframe
+                srcDoc={`
+                  <style>
+                    body {
+                      background-color: ${
+                        theme === "dark" ? "#ffffff" : "#ffffff"
+                      };
+                      color: ${theme === "dark" ? "#111827" : "#111827"};
+                      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                      margin: 0;
+                      padding: 0;
+                      font-size: 0.875rem;
+                      line-height: 1.625;
+                    }
+                    a { color: ${theme === "dark" ? "#60a5fa" : "#2563eb"}; }
+                    p { margin-bottom: 1em; }
+                    img { max-width: 100%; height: auto; display: block; }
+                  </style>
+                  ${processEmailBody(email.body, email.attachments)}
+                `}
+                title="Email Content"
+                className="w-full border-none bg-transparent overflow-hidden"
+                sandbox="allow-same-origin"
+                style={{ minHeight: "100px" }}
+                onLoad={(e) => {
+                  const iframe = e.currentTarget;
+                  if (iframe.contentWindow) {
+                    const height =
+                      iframe.contentWindow.document.documentElement
+                        .scrollHeight;
+                    iframe.style.height = `${height + 20}px`;
+                  }
+                }}
+              />
+            ) : (
+              <pre className="whitespace-pre-wrap font-sans text-gray-900 text-sm">
+                {email.body}
+              </pre>
+            )}
+          </div>
+
+          <hr className="border-gray-200 my-4" />
+
+          {/* Attachments */}
+          {email.attachments && email.attachments.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-xs font-semibold text-gray-900 mb-2">
+                {email.attachments.length} Tệp đính kèm
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {email.attachments.map((attachment) => {
+                  const iconName = getFileIcon(attachment.mime_type);
+                  return (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center gap-2 bg-gray-100 p-2 rounded-lg"
+                    >
+                      <span
+                        className={cn(
+                          "material-symbols-outlined text-[20px]",
+                          iconName === "picture_as_pdf"
+                            ? "text-red-400"
+                            : "text-blue-400"
+                        )}
+                      >
+                        {iconName}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-900 truncate">
+                          {attachment.name}
+                        </p>
+                        <p className="text-[10px] text-gray-500">
                           {formatFileSize(attachment.size)}
                         </p>
                       </div>
+                      <button
+                        className="p-1.5 rounded-full hover:bg-gray-200"
+                        title="Tải xuống"
+                        onClick={() =>
+                          handleDownloadAttachment(
+                            attachment.id,
+                            attachment.name
+                          )
+                        }
+                      >
+                        <span className="material-symbols-outlined text-gray-500 text-[18px]">
+                          download
+                        </span>
+                      </button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-gray-400 hover:text-white hover:bg-gray-700"
-                      onClick={() =>
-                        handleDownloadAttachment(attachment.id, attachment.name)
-                      }
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
+          )}
+
+          {/* Action Buttons (Moved inside content) */}
+          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
+            <button
+              onClick={handleReply}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900"
+            >
+              <span className="material-symbols-outlined text-sm">reply</span>
+              Trả lời
+            </button>
+            <button
+              onClick={handleReplyAll}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900"
+            >
+              <span className="material-symbols-outlined text-sm">
+                reply_all
+              </span>
+              Trả lời tất cả
+            </button>
+            <button
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900"
+              onClick={handleForward}
+            >
+              <span className="material-symbols-outlined text-sm">forward</span>
+              Chuyển tiếp
+            </button>
           </div>
-        )}
-
-        {/* Email Body */}
-        <div className="prose prose-invert max-w-none bg-white rounded-md p-4 text-black">
-          {email.is_html ? (
-            <iframe
-              srcDoc={email.body}
-              title="Email Content"
-              className="w-full min-h-[400px] border-none"
-              sandbox="allow-same-origin"
-            />
-          ) : (
-            <pre className="whitespace-pre-wrap font-sans text-gray-800">
-              {email.body}
-            </pre>
-          )}
         </div>
-      </div>
-
-      {/* Bottom Actions */}
-      <div className="p-4 border-t border-gray-700 bg-gray-800 flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleToggleStar}
-          disabled={toggleStarMutation.isPending}
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          {email.is_starred ? (
-            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-          ) : (
-            <StarOff className="h-4 w-4" />
-          )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <Reply className="h-4 w-4 mr-2" />
-          Reply
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <ReplyAll className="h-4 w-4 mr-2" />
-          Reply All
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <Forward className="h-4 w-4 mr-2" />
-          Forward
-        </Button>
-        <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <Archive className="h-4 w-4 mr-2" />
-          Archive
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-300 hover:text-white hover:bg-gray-700"
-        >
-          <Trash2 className="h-4 w-4 mr-2" />
-          Delete
-        </Button>
       </div>
     </div>
   );

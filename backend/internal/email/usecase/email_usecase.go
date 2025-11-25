@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	authrepo "ga03-backend/internal/auth/repository"
 	emaildomain "ga03-backend/internal/email/domain"
 	"ga03-backend/internal/email/repository"
@@ -191,18 +192,21 @@ func (u *emailUsecase) ToggleStar(userID, id string) error {
 	return u.mailProvider.ToggleStar(ctx, accessToken, refreshToken, id, u.makeTokenUpdateCallback(userID))
 }
 
-func (u *emailUsecase) SendEmail(userID, to, subject, body string, files []*multipart.FileHeader) error {
-	accessToken, refreshToken, err := u.getUserTokens(userID)
+func (u *emailUsecase) SendEmail(userID, to, cc, bcc, subject, body string, files []*multipart.FileHeader) error {
+	user, err := u.userRepo.FindByID(userID)
 	if err != nil {
 		return err
 	}
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
 	
-	if accessToken == "" {
+	if user.AccessToken == "" {
 		return nil // Not supported for local storage yet
 	}
 	
 	ctx := context.Background()
-	return u.mailProvider.SendEmail(ctx, accessToken, refreshToken, to, subject, body, files, u.makeTokenUpdateCallback(userID))
+	return u.mailProvider.SendEmail(ctx, user.AccessToken, user.RefreshToken, user.Name, user.Email, to, cc, bcc, subject, body, files, u.makeTokenUpdateCallback(userID))
 }
 
 func (u *emailUsecase) TrashEmail(userID, id string) error {

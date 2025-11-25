@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 import { emailService } from "@/services/email.service";
 import {
   Dialog,
@@ -10,42 +12,60 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  X,
-  Minimize2,
-  Maximize2,
-  Send,
-  Paperclip,
-  Trash2,
-  Bold,
-  Italic,
-  Underline,
-  List,
-  ListOrdered,
-  Link as LinkIcon,
-  Image as ImageIcon,
-  Loader2,
-} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ComposeEmailProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialTo?: string[];
+  initialCc?: string[];
   initialSubject?: string;
   initialBody?: string;
 }
 
+const modules = {
+  toolbar: [
+    [{ header: [1, 2, false] }],
+    ["bold", "italic", "underline", "strike", "blockquote"],
+    [
+      { list: "ordered" },
+      { list: "bullet" },
+      { indent: "-1" },
+      { indent: "+1" },
+    ],
+    ["link", "image"],
+    ["clean"],
+  ],
+};
+
+const formats = [
+  "header",
+  "bold",
+  "italic",
+  "underline",
+  "strike",
+  "blockquote",
+  "list",
+  "bullet",
+  "indent",
+  "link",
+  "image",
+];
+
 export default function ComposeEmail({
   open,
   onOpenChange,
+  initialTo = [],
+  initialCc = [],
   initialSubject = "",
   initialBody = "",
 }: ComposeEmailProps) {
   const queryClient = useQueryClient();
-  const [to, setTo] = useState<string[]>([]);
+  const [to, setTo] = useState<string[]>(initialTo);
   const [toInput, setToInput] = useState("");
-  const [showCc, setShowCc] = useState(false);
+  const [showCc, setShowCc] = useState(initialCc.length > 0);
   const [showBcc, setShowBcc] = useState(false);
-  const [cc, setCc] = useState<string[]>([]);
+  const [cc, setCc] = useState<string[]>(initialCc);
   const [ccInput, setCcInput] = useState("");
   const [bcc, setBcc] = useState<string[]>([]);
   const [bccInput, setBccInput] = useState("");
@@ -54,10 +74,13 @@ export default function ComposeEmail({
 
   useEffect(() => {
     if (open) {
+      setTo(initialTo);
+      setCc(initialCc);
+      if (initialCc.length > 0) setShowCc(true);
       setSubject(initialSubject);
       setBody(initialBody);
     }
-  }, [open, initialSubject, initialBody]);
+  }, [open, initialTo, initialCc, initialSubject, initialBody]);
 
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -72,12 +95,25 @@ export default function ComposeEmail({
         throw new Error("Please add at least one recipient");
       }
 
-      // For now, we only support sending to the 'to' list as a comma-separated string
-      // Backend needs to be updated to handle CC/BCC if required
+      const allCc = [...cc];
+      if (ccInput.trim()) allCc.push(ccInput.trim());
+
+      const allBcc = [...bcc];
+      if (bccInput.trim()) allBcc.push(bccInput.trim());
+
+      // Inject styles into blockquote tags before sending to ensure they appear correctly in the recipient's email
+      // ReactQuill might strip these styles during editing
+      const processedBody = body.replace(
+        /<blockquote>/g,
+        '<blockquote style="margin: 0 0 0 0.8ex; border-left: 1px #ccc solid; padding-left: 1ex;">'
+      );
+
       await emailService.sendEmail(
         allTo.join(", "),
+        allCc.join(", "),
+        allBcc.join(", "),
         subject,
-        body,
+        processedBody,
         attachments
       );
     },
@@ -171,298 +207,300 @@ export default function ComposeEmail({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl w-full h-[90vh] flex flex-col bg-gray-800 border-gray-700 text-white p-0">
-        {/* Window Controls */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
-          <DialogTitle className="text-lg font-semibold">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={!isMinimized}>
+      <DialogContent
+        showCloseButton={false}
+        hideOverlay={isMinimized}
+        className={cn(
+          "p-0 gap-0 bg-white border-gray-200 shadow-2xl transition-all duration-300 ease-in-out overflow-hidden flex flex-col",
+          isMinimized
+            ? "w-[280px] h-12 bottom-0 right-10 translate-y-0 top-auto left-auto rounded-t-lg rounded-b-none border-b-0"
+            : "w-[95vw] max-w-[1400px] h-[90vh] top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] rounded-xl border"
+        )}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        {/* Header */}
+        <div
+          className={cn(
+            "flex items-center justify-between px-4 py-2.5 bg-gray-100 cursor-pointer shrink-0",
+            isMinimized ? "rounded-t-lg" : ""
+          )}
+          onClick={() => isMinimized && setIsMinimized(false)}
+        >
+          <DialogTitle className="text-sm font-medium text-gray-900">
             New Message
           </DialogTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
-              onClick={() => setIsMinimized(!isMinimized)}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsMinimized(!isMinimized);
+              }}
+              className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-gray-900 transition-colors"
             >
-              {isMinimized ? (
-                <Maximize2 className="h-4 w-4" />
-              ) : (
-                <Minimize2 className="h-4 w-4" />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
-              onClick={() => onOpenChange(false)}
+              <span className="material-symbols-outlined text-[18px]">
+                {isMinimized ? "open_in_full" : "minimize"}
+              </span>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenChange(false);
+              }}
+              className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-gray-900 transition-colors"
             >
-              <X className="h-4 w-4" />
-            </Button>
+              <span className="material-symbols-outlined text-[18px]">
+                close
+              </span>
+            </button>
           </div>
         </div>
 
         {!isMinimized && (
           <>
-            <DialogHeader className="px-4 pt-4 pb-2">
-              {/* To Field */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm text-gray-300 w-12">To:</Label>
-                  <div className="flex-1 flex flex-wrap items-center gap-2 min-h-[40px] px-3 py-2 bg-gray-900 border border-gray-700 rounded">
-                    {to.map((email) => (
-                      <span
-                        key={email}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-gray-700 text-white text-sm rounded-full"
-                      >
-                        {email}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <DialogHeader className="px-4 pt-2 space-y-0 shrink-0">
+                <div className="flex flex-col gap-1">
+                  {/* To Field */}
+                  <div className="flex items-start gap-3 border-b border-gray-200 pb-2">
+                    <Label className="text-sm text-gray-500 w-12 pt-2 font-medium">
+                      To
+                    </Label>
+                    <div className="flex-1 flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {to.map((email) => (
+                          <span
+                            key={email}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-900 text-sm rounded-full border border-gray-200"
+                          >
+                            {email}
+                            <button
+                              onClick={() => handleRemoveRecipient(email, "to")}
+                              className="hover:bg-gray-200 rounded-full p-0.5 flex items-center justify-center"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">
+                                close
+                              </span>
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          type="text"
+                          value={toInput}
+                          onChange={(e) => setToInput(e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, "to")}
+                          onBlur={() => {
+                            if (toInput.trim())
+                              handleAddRecipient(toInput, "to");
+                          }}
+                          placeholder={to.length === 0 ? "Recipients" : ""}
+                          className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-gray-900 placeholder-gray-400 text-sm py-1.5"
+                        />
+                      </div>
+                      <div className="flex gap-3 text-xs">
                         <button
-                          onClick={() => handleRemoveRecipient(email, "to")}
-                          className="hover:bg-gray-600 rounded-full p-0.5"
+                          onClick={() => setShowCc(!showCc)}
+                          className={cn(
+                            "hover:text-gray-900 transition-colors",
+                            showCc
+                              ? "text-gray-900 font-medium"
+                              : "text-gray-500"
+                          )}
                         >
-                          <X className="h-3 w-3" />
+                          Cc
                         </button>
-                      </span>
-                    ))}
-                    <input
+                        <button
+                          onClick={() => setShowBcc(!showBcc)}
+                          className={cn(
+                            "hover:text-gray-900 transition-colors",
+                            showBcc
+                              ? "text-gray-900 font-medium"
+                              : "text-gray-500"
+                          )}
+                        >
+                          Bcc
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cc Field */}
+                  {showCc && (
+                    <div className="flex items-start gap-3 border-b border-gray-200 pb-2 animate-in slide-in-from-top-2 duration-200">
+                      <Label className="text-sm text-gray-500 w-12 pt-2 font-medium">
+                        Cc
+                      </Label>
+                      <div className="flex-1 flex flex-wrap items-center gap-2">
+                        {cc.map((email) => (
+                          <span
+                            key={email}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-900 text-sm rounded-full border border-gray-200"
+                          >
+                            {email}
+                            <button
+                              onClick={() => handleRemoveRecipient(email, "cc")}
+                              className="hover:bg-gray-200 rounded-full p-0.5 flex items-center justify-center"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">
+                                close
+                              </span>
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          type="text"
+                          value={ccInput}
+                          onChange={(e) => setCcInput(e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, "cc")}
+                          onBlur={() => {
+                            if (ccInput.trim())
+                              handleAddRecipient(ccInput, "cc");
+                          }}
+                          className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-gray-900 placeholder-gray-400 text-sm py-1.5"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bcc Field */}
+                  {showBcc && (
+                    <div className="flex items-start gap-3 border-b border-gray-200 pb-2 animate-in slide-in-from-top-2 duration-200">
+                      <Label className="text-sm text-gray-500 w-12 pt-2 font-medium">
+                        Bcc
+                      </Label>
+                      <div className="flex-1 flex flex-wrap items-center gap-2">
+                        {bcc.map((email) => (
+                          <span
+                            key={email}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-900 text-sm rounded-full border border-gray-200"
+                          >
+                            {email}
+                            <button
+                              onClick={() =>
+                                handleRemoveRecipient(email, "bcc")
+                              }
+                              className="hover:bg-gray-200 rounded-full p-0.5 flex items-center justify-center"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">
+                                close
+                              </span>
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          type="text"
+                          value={bccInput}
+                          onChange={(e) => setBccInput(e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, "bcc")}
+                          onBlur={() => {
+                            if (bccInput.trim())
+                              handleAddRecipient(bccInput, "bcc");
+                          }}
+                          className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-gray-900 placeholder-gray-400 text-sm py-1.5"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Subject Field */}
+                  <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
+                    <Label className="text-sm text-gray-500 w-12 font-medium">
+                      Subject
+                    </Label>
+                    <Input
                       type="text"
-                      value={toInput}
-                      onChange={(e) => setToInput(e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(e, "to")}
-                      onBlur={() => {
-                        if (toInput.trim()) handleAddRecipient(toInput, "to");
-                      }}
-                      placeholder={to.length === 0 ? "Add recipients" : ""}
-                      className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-white placeholder-gray-500"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder=""
+                      className="flex-1 bg-transparent border-none text-gray-900 placeholder-gray-400 focus-visible:ring-0 px-0 h-auto py-1.5 font-medium text-base"
                     />
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowCc(!showCc)}
-                      className="text-sm text-blue-400 hover:text-blue-300"
-                    >
-                      Cc
-                    </button>
-                    <button
-                      onClick={() => setShowBcc(!showBcc)}
-                      className="text-sm text-blue-400 hover:text-blue-300"
-                    >
-                      Bcc
-                    </button>
-                  </div>
                 </div>
+              </DialogHeader>
 
-                {/* Cc Field */}
-                {showCc && (
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm text-gray-300 w-12">Cc:</Label>
-                    <div className="flex-1 flex flex-wrap items-center gap-2 min-h-[40px] px-3 py-2 bg-gray-900 border border-gray-700 rounded">
-                      {cc.map((email) => (
-                        <span
-                          key={email}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-gray-700 text-white text-sm rounded-full"
-                        >
-                          {email}
-                          <button
-                            onClick={() => handleRemoveRecipient(email, "cc")}
-                            className="hover:bg-gray-600 rounded-full p-0.5"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        type="text"
-                        value={ccInput}
-                        onChange={(e) => setCcInput(e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, "cc")}
-                        onBlur={() => {
-                          if (ccInput.trim()) handleAddRecipient(ccInput, "cc");
-                        }}
-                        placeholder="Add recipients"
-                        className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-white placeholder-gray-500"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Bcc Field */}
-                {showBcc && (
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm text-gray-300 w-12">Bcc:</Label>
-                    <div className="flex-1 flex flex-wrap items-center gap-2 min-h-[40px] px-3 py-2 bg-gray-900 border border-gray-700 rounded">
-                      {bcc.map((email) => (
-                        <span
-                          key={email}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-gray-700 text-white text-sm rounded-full"
-                        >
-                          {email}
-                          <button
-                            onClick={() => handleRemoveRecipient(email, "bcc")}
-                            className="hover:bg-gray-600 rounded-full p-0.5"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        type="text"
-                        value={bccInput}
-                        onChange={(e) => setBccInput(e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, "bcc")}
-                        onBlur={() => {
-                          if (bccInput.trim())
-                            handleAddRecipient(bccInput, "bcc");
-                        }}
-                        placeholder="Add recipients"
-                        className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-white placeholder-gray-500"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Subject Field */}
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm text-gray-300 w-12">Subject:</Label>
-                  <Input
-                    type="text"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder=""
-                    className="flex-1 bg-gray-900 border-gray-700 text-white placeholder-gray-500"
-                  />
-                </div>
+              {/* Message Body */}
+              <div className="flex-1 flex flex-col min-h-0 bg-white">
+                <ReactQuill
+                  theme="snow"
+                  value={body}
+                  onChange={setBody}
+                  modules={modules}
+                  formats={formats}
+                  placeholder="Write your message here..."
+                  className="flex-1 flex flex-col min-h-0 [&_.ql-container]:flex-1 [&_.ql-container]:overflow-y-auto [&_.ql-container]:text-base [&_.ql-editor]:text-gray-900 [&_.ql-toolbar]:border-gray-200 [&_.ql-container]:border-none [&_.ql-toolbar]:bg-gray-50 [&_.ql-stroke]:stroke-gray-500  [&_.ql-fill]:fill-gray-500 [&_.ql-picker]:text-gray-500"
+                />
               </div>
-            </DialogHeader>
 
-            {/* Message Body */}
-            <div className="flex-1 px-4 py-2">
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Compose your message..."
-                className="w-full h-full bg-gray-900 border border-gray-700 rounded-lg p-4 text-white placeholder-gray-500 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Formatting Toolbar */}
-            <div className="px-4 py-2 border-t border-gray-700 flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
-                title="Bold"
-              >
-                <Bold className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
-                title="Italic"
-              >
-                <Italic className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
-                title="Underline"
-              >
-                <Underline className="h-4 w-4" />
-              </Button>
-              <div className="w-px h-6 bg-gray-700" />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
-                title="Unordered List"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
-                title="Ordered List"
-              >
-                <ListOrdered className="h-4 w-4" />
-              </Button>
-              <div className="w-px h-6 bg-gray-700" />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
-                title="Insert Link"
-              >
-                <LinkIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
-                title="Insert Image"
-              >
-                <ImageIcon className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Attachments */}
-            {attachments.length > 0 && (
-              <div className="px-4 py-2 border-t border-gray-700">
-                <div className="flex flex-wrap gap-2">
-                  {attachments.map((file, index) => (
-                    <span
-                      key={`${file.name}-${index}`}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-gray-700 text-white text-sm rounded-full"
-                    >
-                      {file.name}
-                      <button
-                        onClick={() => handleRemoveAttachment(file.name)}
-                        className="hover:bg-gray-600 rounded-full p-0.5"
+              {/* Attachments */}
+              {attachments.length > 0 && (
+                <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                  <div className="flex flex-wrap gap-2">
+                    {attachments.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-900 text-sm rounded-lg border border-gray-200"
                       >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
+                        <span className="material-symbols-outlined text-lg text-blue-500">
+                          attachment
+                        </span>
+                        <span className="truncate max-w-[200px]">
+                          {file.name}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveAttachment(file.name)}
+                          className="hover:bg-gray-200 rounded-full p-0.5 flex items-center justify-center ml-1"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">
+                            close
+                          </span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Bottom Bar */}
-            <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between bg-gray-800">
-              <div className="flex items-center gap-2">
+            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-3">
                 <Button
                   onClick={handleSend}
                   disabled={sendMutation.isPending}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-9 text-sm font-medium"
                 >
                   {sendMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <span className="material-symbols-outlined animate-spin mr-2 text-xl">
+                      progress_activity
+                    </span>
                   ) : (
-                    <Send className="h-4 w-4 mr-2" />
+                    <span className="material-symbols-outlined mr-2 text-xl">
+                      send
+                    </span>
                   )}
                   Send
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-400 hover:text-white hover:bg-gray-700"
+                <div className="h-6 w-px bg-gray-200 mx-2"></div>
+                <button
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors"
                   onClick={handleAddAttachment}
+                  title="Attach files"
                 >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
+                  <span className="material-symbols-outlined text-[22px]">
+                    attach_file
+                  </span>
+                </button>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-400">Draft saved</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-400 hover:text-white hover:bg-gray-700"
+              <div className="flex items-center gap-2">
+                <button
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors"
                   onClick={handleDiscard}
+                  title="Delete draft"
                 >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                  <span className="material-symbols-outlined text-[22px]">
+                    delete
+                  </span>
+                </button>
               </div>
             </div>
           </>

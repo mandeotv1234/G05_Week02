@@ -1,7 +1,9 @@
 package usecase
 
-import emaildomain "ga03-backend/internal/email/domain"
-import "mime/multipart"
+import (
+	emaildomain "ga03-backend/internal/email/domain"
+	"mime/multipart"
+)
 
 // EmailUsecase defines the interface for email use cases
 type EmailUsecase interface {
@@ -13,7 +15,7 @@ type EmailUsecase interface {
 	MarkEmailAsRead(userID, id string) error
 	MarkEmailAsUnread(userID, id string) error
 	ToggleStar(userID, id string) error
-	SendEmail(userID, to, subject, body string, files []*multipart.FileHeader) error
+	SendEmail(userID, to, cc, bcc, subject, body string, files []*multipart.FileHeader) error
 	TrashEmail(userID, id string) error
 	ArchiveEmail(userID, id string) error
 	WatchMailbox(userID string) error

@@ -16,7 +16,7 @@ type MailProvider interface {
 	GetEmails(ctx context.Context, accessToken, refreshToken, mailboxID string, limit, offset int, query string, onTokenRefresh TokenUpdateFunc) ([]*Email, int, error)
 	GetEmailByID(ctx context.Context, accessToken, refreshToken, messageID string, onTokenRefresh TokenUpdateFunc) (*Email, error)
 	GetAttachment(ctx context.Context, accessToken, refreshToken, messageID, attachmentID string, onTokenRefresh TokenUpdateFunc) (*Attachment, []byte, error)
-	SendEmail(ctx context.Context, accessToken, refreshToken, to, subject, body string, files []*multipart.FileHeader, onTokenRefresh TokenUpdateFunc) error
+	SendEmail(ctx context.Context, accessToken, refreshToken, fromName, fromEmail, to, cc, bcc, subject, body string, files []*multipart.FileHeader, onTokenRefresh TokenUpdateFunc) error
 	TrashEmail(ctx context.Context, accessToken, refreshToken, emailID string, onTokenRefresh TokenUpdateFunc) error
 	ArchiveEmail(ctx context.Context, accessToken, refreshToken, emailID string, onTokenRefresh TokenUpdateFunc) error
 	MarkAsRead(ctx context.Context, accessToken, refreshToken, messageID string, onTokenRefresh TokenUpdateFunc) error

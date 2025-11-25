@@ -240,7 +240,7 @@ func (h *EmailHandler) SendEmail(c *gin.Context) {
 	
 	userID := userData.ID
 
-	if err := h.emailUsecase.SendEmail(userID, req.To, req.Subject, req.Body, req.Files); err != nil {
+	if err := h.emailUsecase.SendEmail(userID, req.To, req.Cc, req.Bcc, req.Subject, req.Body, req.Files); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

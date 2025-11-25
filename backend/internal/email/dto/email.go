@@ -18,6 +18,8 @@ type EmailsResponse struct {
 
 type SendEmailRequest struct {
 	To      string                  `form:"to" binding:"required,email"`
+	Cc      string                  `form:"cc"`
+	Bcc     string                  `form:"bcc"`
 	Subject string                  `form:"subject"`
 	Body    string                  `form:"body"`
 	Files   []*multipart.FileHeader `form:"files"`

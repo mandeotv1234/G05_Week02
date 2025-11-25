@@ -49,12 +49,16 @@ export const emailService = {
 
   sendEmail: async (
     to: string,
+    cc: string,
+    bcc: string,
     subject: string,
     body: string,
     files: File[] = []
   ): Promise<void> => {
     const formData = new FormData();
     formData.append("to", to);
+    formData.append("cc", cc);
+    formData.append("bcc", bcc);
     formData.append("subject", subject);
     formData.append("body", body);
     files.forEach((file) => {

@@ -11,6 +11,7 @@ export interface Attachment {
   size: number;
   mime_type: string;
   url?: string;
+  content_id?: string;
 }
 
 export interface Email {
@@ -38,4 +39,3 @@ export interface EmailsResponse {
   offset: number;
   total: number;
 }
-

@@ -10,8 +10,6 @@ import MailboxList from "@/components/inbox/MailboxList";
 import EmailList from "@/components/inbox/EmailList";
 import EmailDetail from "@/components/inbox/EmailDetail";
 import ComposeEmail from "@/components/inbox/ComposeEmail";
-import { Button } from "@/components/ui/button";
-import { Bell, Settings, User, Menu, LogOut } from "lucide-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 
 export default function InboxPage() {
@@ -28,9 +26,44 @@ export default function InboxPage() {
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeInitialData, setComposeInitialData] = useState({
+    to: [] as string[],
+    cc: [] as string[],
     subject: "",
     body: "",
   });
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("theme") as "light" | "dark") || "light";
+    }
+    return "light";
+  });
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme");
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+      .matches
+      ? "dark"
+      : "light";
+    const initialTheme = (savedTheme as "light" | "dark") || systemTheme;
+
+    setTheme(initialTheme);
+    if (initialTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    if (newTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
 
   // Use URL params or default to 'inbox'
   const selectedMailboxId = mailbox || "inbox";
@@ -93,6 +126,7 @@ export default function InboxPage() {
   const handleSelectMailbox = (id: string) => {
     navigate(`/${id}`);
     setMobileView("list");
+    setIsMobileMenuOpen(false);
   };
 
   const handleSelectEmail = (email: Email) => {
@@ -106,157 +140,231 @@ export default function InboxPage() {
 
   const handleForward = (email: Email) => {
     setComposeInitialData({
+      to: [],
+      cc: [],
       subject: `Fwd: ${email.subject}`,
-      body: `\n\n---------- Forwarded message ---------\nFrom: ${
+      body: `<br><br>---------- Forwarded message ---------<br>From: ${
         email.from
-      }\nDate: ${new Date(email.received_at).toLocaleString()}\nSubject: ${
+      }<br>Date: ${new Date(email.received_at).toLocaleString()}<br>Subject: ${
         email.subject
-      }\nTo: ${email.to.join(", ")}\n\n${email.body || email.preview || ""}`,
+      }<br>To: ${email.to.join(", ")}<br><br>${
+        email.body || email.preview || ""
+      }`,
+    });
+    setIsComposeOpen(true);
+  };
+
+  const handleReply = (email: Email) => {
+    const date = new Date(email.received_at);
+    const weekday = date.toLocaleDateString("vi-VN", { weekday: "short" });
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    const time = date.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    const dateStr = `Vào ${weekday}, ${day} thg ${month}, ${year} vào lúc ${time}`;
+
+    let senderName = email.from;
+    let senderEmail = email.from;
+    const match = email.from.match(/^(.*?)\s*<(.*)>$/);
+    if (match) {
+      senderName = match[1].replace(/"/g, "").trim();
+      senderEmail = match[2].trim();
+    } else {
+      senderName = email.from.replace(/"/g, "").trim();
+      if (senderName.includes("@")) {
+        senderEmail = senderName;
+      }
+    }
+
+    const senderHtml = `${senderName} &lt;<a href="mailto:${senderEmail}">${senderEmail}</a>&gt;`;
+
+    setComposeInitialData({
+      to: [senderEmail],
+      cc: [],
+      subject: `Re: ${email.subject}`,
+      body: `<div dir="ltr"><br></div><br><div class="gmail_quote gmail_quote_container"><div dir="ltr" class="gmail_attr">${dateStr} ${senderHtml} đã viết:<br></div><blockquote class="gmail_quote" style="margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex">${
+        email.body || email.preview || ""
+      }</blockquote></div>`,
+    });
+    setIsComposeOpen(true);
+  };
+
+  const handleReplyAll = (email: Email) => {
+    const date = new Date(email.received_at);
+    const weekday = date.toLocaleDateString("vi-VN", { weekday: "short" });
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    const time = date.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    const dateStr = `Vào ${weekday}, ${day} thg ${month}, ${year} vào lúc ${time}`;
+
+    let senderName = email.from;
+    let senderEmail = email.from;
+    const match = email.from.match(/^(.*?)\s*<(.*)>$/);
+    if (match) {
+      senderName = match[1].replace(/"/g, "").trim();
+      senderEmail = match[2].trim();
+    } else {
+      senderName = email.from.replace(/"/g, "").trim();
+      if (senderName.includes("@")) {
+        senderEmail = senderName;
+      }
+    }
+
+    const senderHtml = `${senderName} &lt;<a href="mailto:${senderEmail}">${senderEmail}</a>&gt;`;
+
+    // Calculate CC list
+    // CC = (Original To + Original CC) - (Me + Sender)
+    const myEmail = user?.email || "";
+    const allRecipients = [...(email.to || []), ...(email.cc || [])];
+
+    const ccList = allRecipients
+      .map((r) => {
+        const match = r.match(/^(.*?)\s*<(.*)>$/);
+        return match ? match[2].trim() : r.trim();
+      })
+      .filter(
+        (email) =>
+          email.toLowerCase() !== myEmail.toLowerCase() &&
+          email.toLowerCase() !== senderEmail.toLowerCase()
+      );
+
+    // Remove duplicates
+    const uniqueCcList = [...new Set(ccList)];
+
+    setComposeInitialData({
+      to: [senderEmail],
+      cc: uniqueCcList,
+      subject: `Re: ${email.subject}`,
+      body: `<div dir="ltr"><br></div><br><div class="gmail_quote gmail_quote_container"><div dir="ltr" class="gmail_attr">${dateStr} ${senderHtml} đã viết:<br></div><blockquote class="gmail_quote" style="margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex">${
+        email.body || email.preview || ""
+      }</blockquote></div>`,
     });
     setIsComposeOpen(true);
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-900 text-white">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="md:hidden text-gray-300 hover:text-white hover:bg-gray-700"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-          <h1 className="text-xl font-bold text-white">MailApp</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-gray-300 hover:text-white hover:bg-gray-700"
-          >
-            <Bell className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-gray-300 hover:text-white hover:bg-gray-700"
-          >
-            <Settings className="h-5 w-5" />
-          </Button>
-          <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
-            <User className="h-5 w-5 text-white" />
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-gray-300 hover:text-white hover:bg-gray-700 flex items-center gap-2"
-            onClick={handleLogout}
-            disabled={logoutMutation.isPending}
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Desktop: 3-column layout */}
-        <div className="hidden md:flex flex-1">
-          {/* Column 1: Sidebar */}
-          <div className="w-64 min-w-60 bg-gray-800 border-r border-gray-700">
-            <MailboxList
-              selectedMailboxId={selectedMailboxId}
-              onSelectMailbox={handleSelectMailbox}
-              onComposeClick={() => setIsComposeOpen(true)}
-            />
-          </div>
-
-          {/* Column 2: Email List */}
-          <div className="w-96 min-w-[360px] bg-gray-900 border-r border-gray-700">
-            <EmailList
-              mailboxId={selectedMailboxId}
-              selectedEmailId={selectedEmailId}
-              onSelectEmail={handleSelectEmail}
-              onToggleStar={handleToggleStar}
-            />
-          </div>
-
-          {/* Column 3: Email Detail */}
-          <div className="flex-1 bg-gray-900">
-            <EmailDetail
-              emailId={selectedEmailId}
-              onToggleStar={handleToggleStar}
-              onForward={handleForward}
-            />
-          </div>
+    <div className="flex h-screen bg-gray-50 dark:bg-[#111418] text-gray-900 dark:text-white overflow-hidden font-sans transition-colors duration-200">
+      {/* Desktop: 3-column layout */}
+      <div className="hidden md:flex w-full h-full">
+        {/* Column 1: Sidebar */}
+        <div className="w-[220px] shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#111418]">
+          <MailboxList
+            selectedMailboxId={selectedMailboxId}
+            onSelectMailbox={handleSelectMailbox}
+            onComposeClick={() => setIsComposeOpen(true)}
+            onLogout={handleLogout}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
         </div>
 
-        {/* Mobile: Single column with navigation */}
-        <div className="md:hidden flex-1 flex flex-col">
-          {isMobileMenuOpen && (
-            <div className="absolute inset-0 z-50 bg-gray-800">
-              <div className="p-4 border-b border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-white">
-                    Mailboxes
-                  </h2>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-300 hover:text-white"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
-              </div>
+        {/* Column 2: Email List */}
+        <div className="w-[360px] shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111418] flex flex-col">
+          <EmailList
+            mailboxId={selectedMailboxId}
+            selectedEmailId={selectedEmailId}
+            onSelectEmail={handleSelectEmail}
+            onToggleStar={handleToggleStar}
+          />
+        </div>
+
+        {/* Column 3: Email Detail */}
+        <div className="flex-1 bg-white dark:bg-[#111418] min-w-0">
+          <EmailDetail
+            emailId={selectedEmailId}
+            onToggleStar={handleToggleStar}
+            onReply={handleReply}
+            onReplyAll={handleReplyAll}
+            onForward={handleForward}
+            theme={theme}
+          />
+        </div>
+      </div>
+
+      {/* Mobile Layout */}
+      <div className="md:hidden flex-1 flex flex-col w-full h-full relative">
+        {/* Mobile Header */}
+        <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 bg-white dark:bg-[#111418] shrink-0">
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
+          >
+            <span className="material-symbols-outlined">menu</span>
+          </button>
+          <span className="font-bold text-lg">MailApp</span>
+          <div className="w-10"></div> {/* Spacer */}
+        </div>
+
+        {/* Mobile Menu Overlay */}
+        {isMobileMenuOpen && (
+          <div className="absolute inset-0 z-50 bg-white dark:bg-[#111418] flex flex-col">
+            <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 shrink-0">
+              <span className="font-bold text-lg">Menu</span>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2 -mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
               <MailboxList
                 selectedMailboxId={selectedMailboxId}
-                onSelectMailbox={(id) => {
-                  handleSelectMailbox(id);
-                  setIsMobileMenuOpen(false);
-                }}
+                onSelectMailbox={handleSelectMailbox}
                 onComposeClick={() => {
                   setIsComposeOpen(true);
                   setIsMobileMenuOpen(false);
                 }}
+                onLogout={handleLogout}
+                theme={theme}
+                onToggleTheme={toggleTheme}
               />
             </div>
-          )}
+          </div>
+        )}
 
-          {mobileView === "list" && (
+        {/* Mobile Content */}
+        <div className="flex-1 overflow-hidden relative">
+          {mobileView === "list" ? (
             <EmailList
               mailboxId={selectedMailboxId}
               selectedEmailId={selectedEmailId}
               onSelectEmail={handleSelectEmail}
               onToggleStar={handleToggleStar}
             />
-          )}
-
-          {mobileView === "detail" && selectedEmailId && (
-            <div className="flex-1 flex flex-col bg-gray-900">
-              <div className="p-4 border-b border-gray-700 bg-gray-800">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-300 hover:text-white"
+          ) : (
+            <div className="absolute inset-0 flex flex-col bg-white dark:bg-[#111418]">
+              <div className="h-12 border-b border-gray-200 dark:border-gray-800 flex items-center px-2 shrink-0">
+                <button
                   onClick={() => {
                     navigate(`/${selectedMailboxId}`);
                     setMobileView("list");
                   }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300"
                 >
-                  ← Back
-                </Button>
+                  <span className="material-symbols-outlined">arrow_back</span>
+                  <span>Back</span>
+                </button>
               </div>
               <div className="flex-1 overflow-hidden">
                 <EmailDetail
                   emailId={selectedEmailId}
                   onToggleStar={handleToggleStar}
+                  onReply={handleReply}
+                  onReplyAll={handleReplyAll}
                   onForward={handleForward}
+                  theme={theme}
                 />
               </div>
             </div>
@@ -269,8 +377,11 @@ export default function InboxPage() {
         open={isComposeOpen}
         onOpenChange={(open) => {
           setIsComposeOpen(open);
-          if (!open) setComposeInitialData({ subject: "", body: "" });
+          if (!open)
+            setComposeInitialData({ to: [], cc: [], subject: "", body: "" });
         }}
+        initialTo={composeInitialData.to}
+        initialCc={composeInitialData.cc}
         initialSubject={composeInitialData.subject}
         initialBody={composeInitialData.body}
       />

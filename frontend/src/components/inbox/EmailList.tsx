@@ -1,22 +1,11 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { emailService } from "@/services/email.service";
 import { getFromCache, saveToCache } from "@/lib/db";
 import type { Email } from "@/types/email";
 import { cn } from "@/lib/utils";
-import {
-  Star,
-  StarOff,
-  Mail,
-  Search,
-  CheckSquare,
-  RefreshCw,
-  Mail as MailIcon,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 interface EmailListProps {
   mailboxId: string | null;
@@ -37,7 +26,8 @@ export default function EmailList({
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [cachedData, setCachedData] = useState<any>(null);
-
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
   const cacheKey = `emails-${mailboxId}-${offset}-${debouncedSearchQuery}`;
 
@@ -57,7 +47,7 @@ export default function EmailList({
     }
   }, [cacheKey, mailboxId]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ["emails", mailboxId, offset, debouncedSearchQuery],
     queryFn: async () => {
       const result = await emailService.getEmailsByMailbox(
@@ -84,41 +74,60 @@ export default function EmailList({
   useEffect(() => {
     setCurrentPage(1);
     setSearchQuery("");
+    setSelectedIds(new Set());
   }, [mailboxId]);
 
-  if (!mailboxId) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400 bg-gray-900">
-        <div className="text-center">
-          <Mail className="h-16 w-16 mx-auto mb-4 text-gray-600" />
-          <p className="text-gray-400">Select a mailbox to view emails</p>
-        </div>
-      </div>
-    );
-  }
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
 
-  if (isLoading) {
-    return (
-      <div className="w-full h-full bg-gray-900">
-        <div className="p-4 space-y-2">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-20 bg-gray-800 animate-pulse rounded" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const handleToggleSelect = (emailId: string) => {
+    const newSelectedIds = new Set(selectedIds);
+    if (newSelectedIds.has(emailId)) {
+      newSelectedIds.delete(emailId);
+    } else {
+      newSelectedIds.add(emailId);
+    }
+    setSelectedIds(newSelectedIds);
+  };
 
-  if (emails.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400 bg-gray-900">
-        <div className="text-center">
-          <Mail className="h-16 w-16 mx-auto mb-4 text-gray-600" />
-          <p className="text-gray-400">No emails in this mailbox</p>
-        </div>
-      </div>
-    );
-  }
+  const handleSelectAll = () => {
+    if (
+      selectedIds.size === filteredEmails.length &&
+      filteredEmails.length > 0
+    ) {
+      setSelectedIds(new Set());
+    } else {
+      const newSelectedIds = new Set(filteredEmails.map((e: Email) => e.id));
+      setSelectedIds(newSelectedIds);
+    }
+  };
+
+  const handleRefreshClick = async () => {
+    const toastId = toast.loading("Đang làm mới...");
+    try {
+      const { isError } = await refetch();
+      if (isError) {
+        toast.error("Làm mới thất bại", { id: toastId });
+      } else {
+        toast.success("Đã làm mới hộp thư", { id: toastId });
+      }
+    } catch (error) {
+      toast.error("Làm mới thất bại", { id: toastId });
+    }
+  };
+  
+  const toggleStarMutation = useMutation({
+    mutationFn: emailService.toggleStar,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+    },
+    onError: () => {
+      toast.error("Failed to toggle star status.");
+    }
+  });
 
   const getTimeDisplay = (date: string) => {
     const emailDate = new Date(date);
@@ -135,142 +144,233 @@ export default function EmailList({
     }
   };
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setCurrentPage(newPage);
-    }
-  };
+  if (!mailboxId) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-400 bg-white dark:bg-[#111418]">
+        <div className="text-center">
+          <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">
+            mail
+          </span>
+          <p className="text-gray-500 dark:text-gray-400">
+            Select a mailbox to view emails
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="w-full h-full bg-white dark:bg-[#111418]">
+        <div className="p-4 space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="h-20 bg-gray-100 dark:bg-[#283039] animate-pulse rounded"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-900">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-700">
-        <h2 className="text-lg font-semibold text-white mb-4">Inbox</h2>
+    <div className="flex flex-col w-full h-full bg-white dark:bg-[#111418] border-r border-gray-200 dark:border-gray-700">
+      <div className="p-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
+        <label className="flex flex-col min-w-40 h-9 w-full">
+          <div className="flex w-full flex-1 items-stretch rounded-lg h-full">
+            <div className="text-gray-500 dark:text-[#9dabb9] flex border-none bg-gray-100 dark:bg-[#283039] items-center justify-center pl-3 pr-2 rounded-l-lg">
+              <span className="material-symbols-outlined text-[20px]">
+                search
+              </span>
+            </div>
+            <input
+              className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-0 border-none bg-gray-100 dark:bg-[#283039] h-full placeholder:text-gray-400 dark:placeholder:text-[#9dabb9] px-2 text-sm font-normal leading-normal"
+              placeholder="Tìm kiếm trong Hộp thư đến"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </label>
+      </div>
 
-        {/* Search Bar */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+      <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-1">
           <input
-            type="text"
-            placeholder="Search mail"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="form-checkbox h-4 w-4 rounded bg-gray-100 dark:bg-[#283039] border-gray-300 dark:border-gray-600 text-primary focus:ring-primary focus:ring-offset-white dark:focus:ring-offset-[#111418] ml-2 cursor-pointer"
+            type="checkbox"
+            checked={
+              selectedIds.size > 0 && selectedIds.size === filteredEmails.length
+            }
+            onChange={handleSelectAll}
           />
+          <button
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039] [font-variation-settings:'wght'_300]"
+            title="Làm mới"
+            onClick={handleRefreshClick}
+          >
+            <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
+              refresh
+            </span>
+          </button>
         </div>
-
-        {/* Toolbar */}
-        <div className="flex items-center gap-2">
-          <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded">
-            <CheckSquare className="h-4 w-4" />
+        <div className="flex items-center gap-1">
+          <button
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039]"
+            title="Đánh dấu đã đọc"
+          >
+            <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
+              mark_email_read
+            </span>
           </button>
-          <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded">
-            <RefreshCw className="h-4 w-4" />
-          </button>
-          <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded">
-            <MailIcon className="h-4 w-4" />
-          </button>
-          <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded">
-            <Trash2 className="h-4 w-4" />
+          <button
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039]"
+            title="Xóa"
+          >
+            <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
+              delete
+            </span>
           </button>
         </div>
       </div>
 
-      {/* Email List */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="divide-y divide-gray-800">
-          {filteredEmails.map((email: Email) => {
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {filteredEmails.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            <div className="text-center">
+              <span className="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-4">
+                inbox
+              </span>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                No emails found
+              </p>
+            </div>
+          </div>
+        ) : (
+          filteredEmails.map((email: Email) => {
             const isSelected = selectedEmailId === email.id;
+            const isChecked = selectedIds.has(email.id);
+            const showCheckbox = selectedIds.size > 0;
 
             return (
               <div
                 key={email.id}
                 onClick={() => onSelectEmail(email)}
                 className={cn(
-                  "w-full text-left p-4 transition-colors cursor-pointer",
-                  isSelected
-                    ? "bg-blue-600/20 border-l-4 border-l-blue-500"
-                    : "hover:bg-gray-800",
-                  !email.is_read && "bg-gray-800/50"
+                  "group flex items-start gap-3 p-3 border-b border-gray-200 dark:border-gray-700 cursor-pointer transition-colors",
+                  isSelected || isChecked
+                    ? "bg-primary/10 border-l-2 border-l-primary"
+                    : "hover:bg-gray-50 dark:hover:bg-[#111418]",
+                  !email.is_read && !isSelected && !isChecked
+                    ? "bg-gray-50 dark:bg-[#1a222d]"
+                    : ""
                 )}
               >
-                <div className="flex items-start gap-3">
+                <div className="relative flex items-center justify-center shrink-0 w-10 h-10">
+                  <div
+                    className={cn(
+                      "w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-300 font-semibold text-sm absolute",
+                      isSelected || isChecked || showCheckbox
+                        ? "hidden"
+                        : "group-hover:hidden"
+                    )}
+                  >
+                    {(email.from_name || email.from || "?")
+                      .replace(/['"]/g, "")
+                      .trim()
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
                   <input
                     type="checkbox"
-                    checked={isSelected}
-                    onChange={() => {}}
+                    checked={isChecked}
+                    onChange={() => handleToggleSelect(email.id)}
                     onClick={(e) => e.stopPropagation()}
-                    className="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleStar(email.id);
-                    }}
-                    className="mt-0.5 shrink-0 cursor-pointer"
-                  >
-                    {email.is_starred ? (
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    ) : (
-                      <StarOff className="h-4 w-4 text-gray-500" />
+                    className={cn(
+                      "form-checkbox h-5 w-5 rounded bg-gray-100 dark:bg-[#283039] border-gray-300 dark:border-gray-600 text-primary focus:ring-primary focus:ring-offset-white dark:focus:ring-offset-[#111418] z-10 cursor-pointer",
+                      isSelected || isChecked || showCheckbox
+                        ? "block"
+                        : "hidden group-hover:block"
                     )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span
-                        className={cn(
-                          "text-sm font-medium truncate",
-                          isSelected ? "text-white" : "text-gray-300",
-                          !email.is_read && "font-semibold"
-                        )}
-                      >
-                        {email.from_name || email.from}
-                      </span>
-                      <span className="text-xs text-gray-500 shrink-0 ml-2">
-                        {getTimeDisplay(email.received_at)}
-                      </span>
-                    </div>
-                    <div
+                  />
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <div className="flex justify-between items-center mb-0.5">
+                    <p
                       className={cn(
-                        "text-sm mb-1 truncate",
-                        isSelected ? "text-white" : "text-gray-400",
-                        !email.is_read && "font-medium"
+                        "text-sm font-semibold truncate",
+                        isSelected
+                          ? "text-primary dark:text-blue-300"
+                          : "text-gray-900 dark:text-white"
                       )}
                     >
-                      {email.subject}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {email.preview}
-                    </div>
+                      {email.subject || "(No Subject)"}
+                    </p>
+                    <span
+                      className={cn(
+                        "text-[11px] shrink-0 ml-2",
+                        isSelected
+                          ? "text-primary dark:text-blue-300"
+                          : "text-gray-500 dark:text-gray-400"
+                      )}
+                    >
+                      {getTimeDisplay(email.received_at)}
+                    </span>
                   </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 truncate font-medium mb-0.5">
+                    {email.from_name || email.from}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {email.preview}
+                  </p>
                 </div>
+                <button
+                  className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 ml-1 shrink-0"
+                  title="Bật/tắt dấu sao"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleStarMutation.mutate(email.id);
+                  }}
+                >
+                  <span
+                    className={cn(
+                      "material-symbols-outlined text-[10px]  [font-variation-settings:'wght'_300]",
+                      email.is_starred
+                        ? "filled text-yellow-400"
+                        : "text-gray-400 dark:text-gray-500"
+                    )}
+                  >
+                    star
+                  </span>
+                </button>
               </div>
             );
-          })}
-        </div>
+          })
+        )}
       </div>
 
       {/* Pagination */}
-      <div className="p-4 border-t border-gray-700 flex items-center justify-between text-sm text-gray-400 bg-gray-800">
+      <div className="p-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-[#111418]">
         <span>
-          Showing {offset + 1}-{Math.min(offset + ITEMS_PER_PAGE, total)} of{" "}
-          {total}
+          {offset + 1}-{Math.min(offset + ITEMS_PER_PAGE, total)} of {total}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
             className={cn(
               "p-1 rounded",
               currentPage === 1
-                ? "text-gray-600 cursor-not-allowed"
-                : "hover:text-white hover:bg-gray-700 text-gray-400"
+                ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
+                : "hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
             )}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <span className="material-symbols-outlined text-lg">
+              chevron_left
+            </span>
           </button>
-          <span className="px-2">
-            Page {currentPage} of {totalPages}
+          <span className="px-1">
+            {currentPage}/{totalPages}
           </span>
           <button
             onClick={() => handlePageChange(currentPage + 1)}
@@ -278,11 +378,13 @@ export default function EmailList({
             className={cn(
               "p-1 rounded",
               currentPage >= totalPages
-                ? "text-gray-600 cursor-not-allowed"
-                : "hover:text-white hover:bg-gray-700 text-gray-400"
+                ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
+                : "hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
             )}
           >
-            <ChevronRight className="h-4 w-4" />
+            <span className="material-symbols-outlined text-lg">
+              chevron_right
+            </span>
           </button>
         </div>
       </div>

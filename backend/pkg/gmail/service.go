@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
+	"regexp"
 	"strings"
 	"time"
-	"errors"
 
 	emaildomain "ga03-backend/internal/email/domain"
 
@@ -357,7 +358,7 @@ func (s *Service) ToggleStar(ctx context.Context, accessToken, refreshToken, ema
 }
 
 // SendEmail sends an email
-func (s *Service) SendEmail(ctx context.Context, accessToken, refreshToken string, to, subject, body string, files []*multipart.FileHeader, onTokenRefresh TokenUpdateFunc) error {
+func (s *Service) SendEmail(ctx context.Context, accessToken, refreshToken, fromName, fromEmail, to, cc, bcc, subject, body string, files []*multipart.FileHeader, onTokenRefresh TokenUpdateFunc) error {
 	srv, err := s.GetGmailService(ctx, accessToken, refreshToken, onTokenRefresh)
 	if err != nil {
 		return err
@@ -369,8 +370,20 @@ func (s *Service) SendEmail(ctx context.Context, accessToken, refreshToken strin
 	boundary := "foo_bar_baz"
 
 	// Headers
+	if fromName != "" && fromEmail != "" {
+		encodedName := fmt.Sprintf("=?utf-8?B?%s?=", base64.StdEncoding.EncodeToString([]byte(fromName)))
+		emailMsg.WriteString(fmt.Sprintf("From: %s <%s>\r\n", encodedName, fromEmail))
+	}
 	emailMsg.WriteString(fmt.Sprintf("To: %s\r\n", to))
-	emailMsg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	if cc != "" {
+		emailMsg.WriteString(fmt.Sprintf("Cc: %s\r\n", cc))
+	}
+	if bcc != "" {
+		emailMsg.WriteString(fmt.Sprintf("Bcc: %s\r\n", bcc))
+	}
+	// Encode subject to handle non-ASCII characters (RFC 2047)
+	encodedSubject := fmt.Sprintf("=?utf-8?B?%s?=", base64.StdEncoding.EncodeToString([]byte(subject)))
+	emailMsg.WriteString(fmt.Sprintf("Subject: %s\r\n", encodedSubject))
 	emailMsg.WriteString("MIME-Version: 1.0\r\n")
 	emailMsg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", boundary))
 
@@ -527,7 +540,23 @@ func convertGmailMessageToEmail(msg *gmail.Message) *emaildomain.Email {
 	
 	body, isHTML := getEmailBody(msg.Payload)
 	preview := body
-	// Strip HTML tags for preview if needed, but for now just truncate
+
+	if isHTML {
+		// Strip HTML tags
+		re := regexp.MustCompile(`<[^>]*>`)
+		preview = re.ReplaceAllString(preview, " ")
+		// Unescape HTML entities (basic ones)
+		preview = strings.ReplaceAll(preview, "&nbsp;", " ")
+		preview = strings.ReplaceAll(preview, "&lt;", "<")
+		preview = strings.ReplaceAll(preview, "&gt;", ">")
+		preview = strings.ReplaceAll(preview, "&amp;", "&")
+		preview = strings.ReplaceAll(preview, "&quot;", "\"")
+	}
+
+	// Collapse multiple spaces into one
+	preview = strings.Join(strings.Fields(preview), " ")
+
+	// Truncate for preview
 	if len(preview) > 200 {
 		preview = preview[:200] + "..."
 	}
@@ -614,11 +643,15 @@ func getAttachments(payload *gmail.MessagePart) []emaildomain.Attachment {
 	findAttachments = func(parts []*gmail.MessagePart) {
 		for _, part := range parts {
 			if part.Filename != "" && part.Body != nil && part.Body.AttachmentId != "" {
+				contentID := getHeader(part.Headers, "Content-ID")
+				contentID = strings.Trim(contentID, "<>")
+
 				attachments = append(attachments, emaildomain.Attachment{
-					ID:       part.Body.AttachmentId,
-					Name:     part.Filename,
-					Size:     int64(part.Body.Size),
-					MimeType: part.MimeType,
+					ID:        part.Body.AttachmentId,
+					Name:      part.Filename,
+					Size:      int64(part.Body.Size),
+					MimeType:  part.MimeType,
+					ContentID: contentID,
 				})
 			}
 			
