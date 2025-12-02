@@ -5,6 +5,7 @@ import { emailService } from "@/services/email.service";
 import type { Mailbox } from "@/types/email";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface MailboxListProps {
   selectedMailboxId: string | null;
@@ -183,6 +184,7 @@ export default function MailboxList({
             </Button>
             <Button
               variant="ghost"
+              onClick={() => toast.info("Tính năng đang phát triển")}
               className="w-full px-3 py-2 justify-start h-auto text-left text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2 transition-colors text-sm rounded-none"
             >
               <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-lg">

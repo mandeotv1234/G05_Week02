@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface ComposeEmailProps {
   open: boolean;
@@ -61,29 +62,56 @@ export default function ComposeEmail({
   initialBody = "",
 }: ComposeEmailProps) {
   const queryClient = useQueryClient();
-  const [to, setTo] = useState<string[]>(initialTo);
+  const [to, setTo] = useState<string[]>([]);
   const [toInput, setToInput] = useState("");
-  const [showCc, setShowCc] = useState(initialCc.length > 0);
+  const [showCc, setShowCc] = useState(false);
   const [showBcc, setShowBcc] = useState(false);
-  const [cc, setCc] = useState<string[]>(initialCc);
+  const [cc, setCc] = useState<string[]>([]);
   const [ccInput, setCcInput] = useState("");
   const [bcc, setBcc] = useState<string[]>([]);
   const [bccInput, setBccInput] = useState("");
-  const [subject, setSubject] = useState(initialSubject);
-  const [body, setBody] = useState(initialBody);
-
-  useEffect(() => {
-    if (open) {
-      setTo(initialTo);
-      setCc(initialCc);
-      if (initialCc.length > 0) setShowCc(true);
-      setSubject(initialSubject);
-      setBody(initialBody);
-    }
-  }, [open, initialTo, initialCc, initialSubject, initialBody]);
-
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isMinimized, setIsMinimized] = useState(false);
+
+  // Track previous open state to detect transitions
+  const prevOpen = useRef(open);
+  
+  useEffect(() => {
+    // Dialog just opened - load initial data
+    if (open && !prevOpen.current) {
+      if (initialTo.length > 0 || initialCc.length > 0 || initialSubject || initialBody) {
+        // Use setTimeout to avoid setState during render
+        setTimeout(() => {
+          setTo(initialTo);
+          setCc(initialCc);
+          if (initialCc.length > 0) setShowCc(true);
+          setSubject(initialSubject);
+          setBody(initialBody);
+        }, 0);
+      }
+    }
+    // Dialog just closed - reset form
+    else if (!open && prevOpen.current) {
+      setTimeout(() => {
+        setTo([]);
+        setToInput("");
+        setCc([]);
+        setCcInput("");
+        setBcc([]);
+        setBccInput("");
+        setSubject("");
+        setBody("");
+        setAttachments([]);
+        setShowCc(false);
+        setShowBcc(false);
+        setIsMinimized(false);
+      }, 0);
+    }
+    
+    prevOpen.current = open;
+  }, [open, initialTo, initialCc, initialSubject, initialBody]);
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -92,7 +120,7 @@ export default function ComposeEmail({
       if (toInput.trim()) allTo.push(toInput.trim());
 
       if (allTo.length === 0) {
-        throw new Error("Please add at least one recipient");
+        throw new Error("Vui lòng thêm ít nhất một người nhận");
       }
 
       const allCc = [...cc];
@@ -118,6 +146,7 @@ export default function ComposeEmail({
       );
     },
     onSuccess: () => {
+      toast.success("Đã gửi email thành công");
       onOpenChange(false);
       // Reset form
       setTo([]);
@@ -127,13 +156,15 @@ export default function ComposeEmail({
       setSubject("");
       setBody("");
       setAttachments([]);
+      setShowCc(false);
+      setShowBcc(false);
       // Invalidate queries to refresh lists
       queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["mailboxes"] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("Failed to send email:", error);
-      alert("Failed to send email. Please try again.");
+      toast.error(error?.message || "Không thể gửi email. Vui lòng thử lại");
     },
   });
 
@@ -214,8 +245,8 @@ export default function ComposeEmail({
         className={cn(
           "p-0 gap-0 bg-white border-gray-200 shadow-2xl transition-all duration-300 ease-in-out overflow-hidden flex flex-col",
           isMinimized
-            ? "!w-60 h-12 bottom-0 right-10 translate-y-0 top-auto left-[93%] rounded-t-lg rounded-b-none border-b-0"
-            : "!w-[70vw] max-w-[1400px] h-[90vh] top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] rounded-xl border"
+            ? "w-60! h-12 bottom-0 right-10 translate-y-0 top-auto left-[93%] rounded-t-lg rounded-b-none border-b-0"
+            : "w-[70vw]! max-w-[1400px] h-[90vh] top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] rounded-xl border"
         )}
         onInteractOutside={(e) => e.preventDefault()}
       >

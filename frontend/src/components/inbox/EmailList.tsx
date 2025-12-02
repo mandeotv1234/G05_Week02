@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { emailService } from "@/services/email.service";
 import { getFromCache, saveToCache } from "@/lib/db";
-import type { Email } from "@/types/email";
+import type { Email, EmailsResponse } from "@/types/email";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ export default function EmailList({
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [cachedData, setCachedData] = useState<any>(null);
+  const [cachedData, setCachedData] = useState<EmailsResponse | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -60,7 +60,7 @@ export default function EmailList({
       return result;
     },
     enabled: !!mailboxId,
-    placeholderData: cachedData,
+    placeholderData: cachedData ?? undefined,
   });
 
   const emails = data?.emails || [];
@@ -70,12 +70,19 @@ export default function EmailList({
   // Client-side filtering is no longer needed as we do server-side search
   const filteredEmails = emails;
 
-  // Reset to page 1 when mailbox changes
+  // Reset state when mailbox changes
+  const prevMailboxIdRef = useRef(mailboxId);
   useEffect(() => {
-    setCurrentPage(1);
-    setSearchQuery("");
-    setSelectedIds(new Set());
-    setCachedData(null);
+    if (prevMailboxIdRef.current !== mailboxId) {
+      prevMailboxIdRef.current = mailboxId;
+      // Use setTimeout to avoid setState during render
+      setTimeout(() => {
+        setCurrentPage(1);
+        setSearchQuery("");
+        setSelectedIds(new Set());
+        setCachedData(null);
+      }, 0);
+    }
   }, [mailboxId]);
 
   const handlePageChange = (newPage: number) => {
@@ -115,18 +122,24 @@ export default function EmailList({
       } else {
         toast.success("Đã làm mới hộp thư", { id: toastId });
       }
-    } catch (error) {
+    } catch {
       toast.error("Làm mới thất bại", { id: toastId });
     }
   };
 
   const toggleStarMutation = useMutation({
     mutationFn: emailService.toggleStar,
-    onSuccess: (_, emailId) => {
-      // Update UI immediately after successful response from backend
-      queryClient.setQueryData(
-        ["emails", mailboxId, offset, debouncedSearchQuery],
-        (old: any) => {
+    onMutate: async (emailId) => {
+      // Cancel outgoing queries to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ["emails"] });
+      await queryClient.cancelQueries({ queryKey: ["email", emailId] });
+      
+      const previousData = queryClient.getQueryData(["emails", mailboxId, offset, debouncedSearchQuery]);
+
+      // Update all email list caches (including current page)
+      queryClient.setQueriesData<EmailsResponse>(
+        { queryKey: ["emails"] },
+        (old) => {
           if (!old) return old;
           return {
             ...old,
@@ -139,12 +152,34 @@ export default function EmailList({
         }
       );
 
-      // Refetch in background to ensure sync with server
+      // Update email detail cache
+      queryClient.setQueryData<Email>(
+        ["email", emailId],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            is_starred: !old.is_starred,
+          };
+        }
+      );
+
+      return { previousData, emailId };
+    },
+    onError: (_err, emailId, context) => {
+      // Restore previous data on error
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ["emails", mailboxId, offset, debouncedSearchQuery],
+          context.previousData
+        );
+      }
+      toast.error("Không thể cập nhật trạng thái đánh dấu sao");
+      // Refetch all to restore correct state
       queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["email", emailId] });
     },
-    onError: () => {
-      toast.error("Failed to toggle star status.");
-    },
+    // Don't use onSettled - let the optimistic update persist
   });
 
   const getTimeDisplay = (date: string) => {
@@ -240,6 +275,8 @@ export default function EmailList({
             size="icon"
             className="h-8 w-8 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039]"
             title="Đánh dấu đã đọc"
+            onClick={() => toast.info("Tính năng đang phát triển")}
+            disabled={selectedIds.size === 0}
           >
             <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
               mark_email_read
@@ -250,6 +287,8 @@ export default function EmailList({
             size="icon"
             className="h-8 w-8 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039]"
             title="Xóa"
+            onClick={() => toast.info("Tính năng đang phát triển")}
+            disabled={selectedIds.size === 0}
           >
             <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
               delete
@@ -275,6 +314,9 @@ export default function EmailList({
             const isSelected = selectedEmailId === email.id;
             const isChecked = selectedIds.has(email.id);
             const showCheckbox = selectedIds.size > 0;
+            
+            // Check if this email is being toggled
+            const isTogglingThis = toggleStarMutation.isPending && toggleStarMutation.variables === email.id;
 
             return (
               <div
@@ -357,14 +399,10 @@ export default function EmailList({
                     e.stopPropagation();
                     toggleStarMutation.mutate(email.id);
                   }}
-                  disabled={
-                    toggleStarMutation.isPending &&
-                    toggleStarMutation.variables === email.id
-                  }
+                  disabled={isTogglingThis}
                 >
-                  {toggleStarMutation.isPending &&
-                  toggleStarMutation.variables === email.id ? (
-                    <span className="material-symbols-outlined text-[10px] text-gray-400 dark:text-gray-500 animate-spin">
+                  {isTogglingThis ? (
+                    <span className="material-symbols-outlined text-[18px] text-gray-400 dark:text-gray-500 animate-spin">
                       progress_activity
                     </span>
                   ) : (

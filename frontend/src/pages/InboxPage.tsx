@@ -35,26 +35,24 @@ export default function InboxPage() {
   });
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("theme") as "light" | "dark") || "light";
+      const savedTheme = localStorage.getItem("theme");
+      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+        .matches
+        ? "dark"
+        : "light";
+      const initialTheme = (savedTheme as "light" | "dark") || systemTheme;
+      
+      // Apply theme immediately on mount
+      if (initialTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+      
+      return initialTheme;
     }
     return "light";
   });
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-      .matches
-      ? "dark"
-      : "light";
-    const initialTheme = (savedTheme as "light" | "dark") || systemTheme;
-
-    setTheme(initialTheme);
-    if (initialTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, []);
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -85,19 +83,42 @@ export default function InboxPage() {
         }
       );
 
+      let lastMutationTime = 0;
+      
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === "email_update") {
             console.log("Received email update:", data.payload);
-            // Invalidate queries to refresh lists
-            queryClient.invalidateQueries({ queryKey: ["emails"] });
-            queryClient.invalidateQueries({ queryKey: ["mailboxes"] });
+            
+            // Ignore SSE updates for 3 seconds after user actions to prevent conflicts
+            const timeSinceLastMutation = Date.now() - lastMutationTime;
+            if (timeSinceLastMutation < 3000) {
+              console.log("Ignoring SSE update - recent user action");
+              return;
+            }
+            
+            // Only invalidate for new emails or external changes
+            queryClient.invalidateQueries({ 
+              queryKey: ["emails"],
+              refetchType: 'none'
+            });
+            queryClient.invalidateQueries({ 
+              queryKey: ["mailboxes"],
+              refetchType: 'none'
+            });
           }
         } catch (error) {
           console.error("Error parsing SSE message:", error);
         }
       };
+      
+      // Track mutation time to debounce SSE updates
+      const unsubscribe = queryClient.getMutationCache().subscribe((event) => {
+        if (event?.type === 'updated' && event.mutation.state.status === 'pending') {
+          lastMutationTime = Date.now();
+        }
+      });
 
       eventSource.onerror = (error) => {
         console.error("SSE error:", error);
@@ -106,6 +127,7 @@ export default function InboxPage() {
 
       return () => {
         eventSource.close();
+        unsubscribe();
       };
     }
   }, [user, queryClient]);
@@ -135,7 +157,8 @@ export default function InboxPage() {
   };
 
   const handleToggleStar = () => {
-    queryClient.invalidateQueries({ queryKey: ["emails"] });
+    // Do nothing - let the mutation handle cache updates
+    // This callback is kept for backward compatibility but no longer invalidates
   };
 
   const handleForward = (email: Email) => {
