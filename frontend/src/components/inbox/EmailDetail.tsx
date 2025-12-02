@@ -7,6 +7,7 @@ import { getAccessToken } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 interface EmailDetailProps {
   emailId: string | null;
@@ -233,68 +234,82 @@ export default function EmailDetail({
           </h2>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-0.5">
-              <button
-                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"
                 title="Trả lời"
                 onClick={handleReply}
               >
-                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px]  [font-variation-settings:'wght'_300]">
+                <span className="material-symbols-outlined text-[18px] [font-variation-settings:'wght'_300]">
                   reply
                 </span>
-              </button>
-              <button
-                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"
                 title="Trả lời tất cả"
                 onClick={handleReplyAll}
               >
-                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                <span className="material-symbols-outlined text-[18px] [font-variation-settings:'wght'_300]">
                   reply_all
                 </span>
-              </button>
-              <button
-                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"
                 title="Chuyển tiếp"
                 onClick={handleForward}
               >
-                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                <span className="material-symbols-outlined text-[18px] [font-variation-settings:'wght'_300]">
                   forward
                 </span>
-              </button>
-              <button
-                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"
                 title="Lưu trữ"
                 onClick={handleArchive}
               >
-                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px]  [font-variation-settings:'wght'_300]">
+                <span className="material-symbols-outlined text-[18px] [font-variation-settings:'wght'_300]">
                   archive
                 </span>
-              </button>
-              <button
-                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"
                 title="Đánh dấu chưa đọc"
                 onClick={handleMarkAsUnread}
               >
-                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                <span className="material-symbols-outlined text-[18px] [font-variation-settings:'wght'_300]">
                   mark_email_unread
                 </span>
-              </button>
-              <button
-                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"
                 title="Xóa"
                 onClick={handleTrash}
               >
-                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                <span className="material-symbols-outlined text-[18px] [font-variation-settings:'wght'_300]">
                   delete
                 </span>
-              </button>
-              <button
-                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-white/10"
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"
                 title="Thêm"
               >
-                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[16px] [font-variation-settings:'wght'_300]">
+                <span className="material-symbols-outlined text-[18px] [font-variation-settings:'wght'_300]">
                   more_vert
                 </span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -346,8 +361,10 @@ export default function EmailDetail({
                   <span className="hidden md:block">
                     {getTimeDisplay(email.received_at)}
                   </span>
-                  <button
-                    className="p-1 rounded-full hover:bg-gray-100"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full"
                     title="Bật/tắt dấu sao"
                     onClick={handleToggleStar}
                   >
@@ -359,24 +376,28 @@ export default function EmailDetail({
                     >
                       star
                     </span>
-                  </button>
-                  <button
-                    className="p-1 rounded-full hover:bg-gray-100"
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full"
                     title="Trả lời"
                     onClick={handleReply}
                   >
                     <span className="material-symbols-outlined text-[18px]">
                       reply
                     </span>
-                  </button>
-                  <button
-                    className="p-1 rounded-full hover:bg-gray-100"
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full"
                     title="Khác"
                   >
                     <span className="material-symbols-outlined text-[18px]">
                       more_vert
                     </span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -460,8 +481,10 @@ export default function EmailDetail({
                           {formatFileSize(attachment.size)}
                         </p>
                       </div>
-                      <button
-                        className="p-1.5 rounded-full hover:bg-gray-200"
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full hover:bg-gray-200"
                         title="Tải xuống"
                         onClick={() =>
                           handleDownloadAttachment(
@@ -473,7 +496,7 @@ export default function EmailDetail({
                         <span className="material-symbols-outlined text-gray-500 text-[18px]">
                           download
                         </span>
-                      </button>
+                      </Button>
                     </div>
                   );
                 })}
@@ -483,29 +506,32 @@ export default function EmailDetail({
 
           {/* Action Buttons (Moved inside content) */}
           <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
-            <button
+            <Button
               onClick={handleReply}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900"
+              variant="secondary"
+              className="gap-2 px-3 py-1.5 h-auto text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900 shadow-none border-none"
             >
               <span className="material-symbols-outlined text-sm">reply</span>
               Trả lời
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleReplyAll}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900"
+              variant="secondary"
+              className="gap-2 px-3 py-1.5 h-auto text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900 shadow-none border-none"
             >
               <span className="material-symbols-outlined text-sm">
                 reply_all
               </span>
               Trả lời tất cả
-            </button>
-            <button
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900"
+            </Button>
+            <Button
+              className="gap-2 px-3 py-1.5 h-auto text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900 shadow-none border-none"
               onClick={handleForward}
+              variant="secondary"
             >
               <span className="material-symbols-outlined text-sm">forward</span>
               Chuyển tiếp
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import type { Email } from "@/types/email";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 interface EmailListProps {
   mailboxId: string | null;
@@ -221,33 +222,39 @@ export default function EmailList({
             }
             onChange={handleSelectAll}
           />
-          <button
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039] [font-variation-settings:'wght'_300]"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039]"
             title="Làm mới"
             onClick={handleRefreshClick}
           >
             <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
               refresh
             </span>
-          </button>
+          </Button>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039]"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039]"
             title="Đánh dấu đã đọc"
           >
             <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
               mark_email_read
             </span>
-          </button>
-          <button
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039]"
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-gray-100 dark:hover:bg-[#283039]"
             title="Xóa"
           >
             <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
               delete
             </span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -341,8 +348,10 @@ export default function EmailList({
                     {email.preview}
                   </p>
                 </div>
-                <button
-                  className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 ml-1 shrink-0"
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 ml-1 shrink-0"
                   title="Bật/tắt dấu sao"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -361,7 +370,7 @@ export default function EmailList({
                   ) : (
                     <span
                       className={cn(
-                        "material-symbols-outlined text-[10px]  [font-variation-settings:'wght'_300]",
+                        "material-symbols-outlined text-[18px] [font-variation-settings:'wght'_300]",
                         email.is_starred
                           ? "filled text-yellow-400"
                           : "text-gray-400 dark:text-gray-500"
@@ -370,7 +379,7 @@ export default function EmailList({
                       star
                     </span>
                   )}
-                </button>
+                </Button>
               </div>
             );
           })
@@ -383,37 +392,31 @@ export default function EmailList({
           {offset + 1}-{Math.min(offset + ITEMS_PER_PAGE, total)} of {total}
         </span>
         <div className="flex items-center gap-1">
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className={cn(
-              "p-1 rounded",
-              currentPage === 1
-                ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
-                : "hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-            )}
+            className="h-8 w-8 rounded"
           >
             <span className="material-symbols-outlined text-lg">
               chevron_left
             </span>
-          </button>
+          </Button>
           <span className="px-1">
             {currentPage}/{totalPages}
           </span>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className={cn(
-              "p-1 rounded",
-              currentPage >= totalPages
-                ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
-                : "hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-            )}
+            className="h-8 w-8 rounded"
           >
             <span className="material-symbols-outlined text-lg">
               chevron_right
             </span>
-          </button>
+          </Button>
         </div>
       </div>
     </div>

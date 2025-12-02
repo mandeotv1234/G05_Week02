@@ -12,6 +12,7 @@ import EmailDetail from "@/components/inbox/EmailDetail";
 import ComposeEmail from "@/components/inbox/ComposeEmail";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/config/api";
+import { Button } from "@/components/ui/button";
 
 export default function InboxPage() {
   const navigate = useNavigate();
@@ -295,12 +296,14 @@ export default function InboxPage() {
       <div className="md:hidden flex-1 flex flex-col w-full h-full relative">
         {/* Mobile Header */}
         <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 bg-white dark:bg-[#111418] shrink-0">
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
+            className="-ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
           >
             <span className="material-symbols-outlined">menu</span>
-          </button>
+          </Button>
           <span className="font-bold text-lg">MailApp</span>
           <div className="w-10"></div> {/* Spacer */}
         </div>
@@ -310,12 +313,14 @@ export default function InboxPage() {
           <div className="absolute inset-0 z-50 bg-white dark:bg-[#111418] flex flex-col">
             <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 shrink-0">
               <span className="font-bold text-lg">Menu</span>
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="p-2 -mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
+                className="-mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
               >
                 <span className="material-symbols-outlined">close</span>
-              </button>
+              </Button>
             </div>
             <div className="flex-1 overflow-y-auto">
               <MailboxList
@@ -345,16 +350,17 @@ export default function InboxPage() {
           ) : (
             <div className="absolute inset-0 flex flex-col bg-white dark:bg-[#111418]">
               <div className="h-12 border-b border-gray-200 dark:border-gray-800 flex items-center px-2 shrink-0">
-                <button
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     navigate(`/${selectedMailboxId}`);
                     setMobileView("list");
                   }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300"
+                  className="flex items-center gap-1 px-2 py-1 h-auto rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300"
                 >
                   <span className="material-symbols-outlined">arrow_back</span>
                   <span>Back</span>
-                </button>
+                </Button>
               </div>
               <div className="flex-1 overflow-hidden">
                 <EmailDetail

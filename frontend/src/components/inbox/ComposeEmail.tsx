@@ -231,28 +231,32 @@ export default function ComposeEmail({
             New Message
           </DialogTitle>
           <div className="flex items-center gap-1">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-200"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMinimized(!isMinimized);
               }}
-              className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-gray-900 transition-colors"
             >
               <span className="material-symbols-outlined text-[18px]">
                 {isMinimized ? "open_in_full" : "minimize"}
               </span>
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-200"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenChange(false);
               }}
-              className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-gray-900 transition-colors"
             >
               <span className="material-symbols-outlined text-[18px]">
                 close
               </span>
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -274,14 +278,16 @@ export default function ComposeEmail({
                             className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-900 text-sm rounded-full border border-gray-200"
                           >
                             {email}
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4 rounded-full hover:bg-gray-200 p-0"
                               onClick={() => handleRemoveRecipient(email, "to")}
-                              className="hover:bg-gray-200 rounded-full p-0.5 flex items-center justify-center"
                             >
                               <span className="material-symbols-outlined text-[16px]">
                                 close
                               </span>
-                            </button>
+                            </Button>
                           </span>
                         ))}
                         <input
@@ -298,28 +304,32 @@ export default function ComposeEmail({
                         />
                       </div>
                       <div className="flex gap-3 text-xs">
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setShowCc(!showCc)}
                           className={cn(
-                            "hover:text-gray-900 transition-colors",
+                            "h-auto p-0 hover:bg-transparent transition-colors",
                             showCc
                               ? "text-gray-900 font-medium"
                               : "text-gray-500"
                           )}
                         >
                           Cc
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setShowBcc(!showBcc)}
                           className={cn(
-                            "hover:text-gray-900 transition-colors",
+                            "h-auto p-0 hover:bg-transparent transition-colors",
                             showBcc
                               ? "text-gray-900 font-medium"
                               : "text-gray-500"
                           )}
                         >
                           Bcc
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -337,14 +347,16 @@ export default function ComposeEmail({
                             className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-900 text-sm rounded-full border border-gray-200"
                           >
                             {email}
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4 rounded-full hover:bg-gray-200 p-0"
                               onClick={() => handleRemoveRecipient(email, "cc")}
-                              className="hover:bg-gray-200 rounded-full p-0.5 flex items-center justify-center"
                             >
                               <span className="material-symbols-outlined text-[16px]">
                                 close
                               </span>
-                            </button>
+                            </Button>
                           </span>
                         ))}
                         <input
@@ -375,16 +387,18 @@ export default function ComposeEmail({
                             className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-900 text-sm rounded-full border border-gray-200"
                           >
                             {email}
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4 rounded-full hover:bg-gray-200 p-0"
                               onClick={() =>
                                 handleRemoveRecipient(email, "bcc")
                               }
-                              className="hover:bg-gray-200 rounded-full p-0.5 flex items-center justify-center"
                             >
                               <span className="material-symbols-outlined text-[16px]">
                                 close
                               </span>
-                            </button>
+                            </Button>
                           </span>
                         ))}
                         <input
@@ -446,14 +460,16 @@ export default function ComposeEmail({
                         <span className="truncate max-w-[200px]">
                           {file.name}
                         </span>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 rounded-full hover:bg-gray-200 p-0 ml-1"
                           onClick={() => handleRemoveAttachment(file.name)}
-                          className="hover:bg-gray-200 rounded-full p-0.5 flex items-center justify-center ml-1"
                         >
                           <span className="material-symbols-outlined text-[16px]">
                             close
                           </span>
-                        </button>
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -481,26 +497,30 @@ export default function ComposeEmail({
                   Send
                 </Button>
                 <div className="h-6 w-px bg-gray-200 mx-2"></div>
-                <button
-                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors"
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full h-10 w-10 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
                   onClick={handleAddAttachment}
                   title="Attach files"
                 >
                   <span className="material-symbols-outlined text-[22px]">
                     attach_file
                   </span>
-                </button>
+                </Button>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors"
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full h-10 w-10 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
                   onClick={handleDiscard}
                   title="Delete draft"
                 >
                   <span className="material-symbols-outlined text-[22px]">
                     delete
                   </span>
-                </button>
+                </Button>
               </div>
             </div>
           </>
