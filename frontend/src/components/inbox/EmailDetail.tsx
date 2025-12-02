@@ -408,6 +408,7 @@ export default function EmailDetail({
             {email.is_html ? (
               <iframe
                 srcDoc={`
+                  <base target="_blank" />
                   <style>
                     body {
                       background-color: ${
@@ -428,7 +429,7 @@ export default function EmailDetail({
                 `}
                 title="Email Content"
                 className="w-full border-none bg-transparent overflow-hidden"
-                sandbox="allow-same-origin"
+                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                 style={{ minHeight: "100px" }}
                 onLoad={(e) => {
                   const iframe = e.currentTarget;
