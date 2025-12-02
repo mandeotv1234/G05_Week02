@@ -214,8 +214,8 @@ export default function ComposeEmail({
         className={cn(
           "p-0 gap-0 bg-white border-gray-200 shadow-2xl transition-all duration-300 ease-in-out overflow-hidden flex flex-col",
           isMinimized
-            ? "w-[280px] h-12 bottom-0 right-10 translate-y-0 top-auto left-auto rounded-t-lg rounded-b-none border-b-0"
-            : "w-[95vw] max-w-[1400px] h-[90vh] top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] rounded-xl border"
+            ? "!w-60 h-12 bottom-0 right-10 translate-y-0 top-auto left-[93%] rounded-t-lg rounded-b-none border-b-0"
+            : "!w-[70vw] max-w-[1400px] h-[90vh] top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] rounded-xl border"
         )}
         onInteractOutside={(e) => e.preventDefault()}
       >
@@ -403,8 +403,8 @@ export default function ComposeEmail({
                   )}
 
                   {/* Subject Field */}
-                  <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
-                    <Label className="text-sm text-gray-500 w-12 font-medium">
+                  <div className="flex items-center gap-3 pb-2">
+                    <Label className="text-sm text-gray-500 w-12">
                       Subject
                     </Label>
                     <Input
@@ -412,7 +412,7 @@ export default function ComposeEmail({
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
                       placeholder=""
-                      className="flex-1 bg-transparent border-none text-gray-900 placeholder-gray-400 focus-visible:ring-0 px-0 h-auto py-1.5 font-medium text-base"
+                      className="flex-1 bg-transparent border-none text-gray-900  focus-visible:ring-0 px-0 h-auto py-1.5 font-medium text-base"
                     />
                   </div>
                 </div>
