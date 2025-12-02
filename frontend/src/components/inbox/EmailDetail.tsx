@@ -40,7 +40,7 @@ export default function EmailDetail({
       // Cancel outgoing queries to prevent overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: ["email", emailId] });
       await queryClient.cancelQueries({ queryKey: ["emails"] });
-      
+
       const previousEmail = queryClient.getQueryData<Email>(["email", emailId]);
 
       // Update email detail cache
@@ -192,7 +192,7 @@ export default function EmailDetail({
     filename: string
   ) => {
     if (!emailId) return;
-    
+
     try {
       const token = getAccessToken();
       const url = `${API_BASE_URL}/emails/${emailId}/attachments/${attachmentId}?token=${token}`;
@@ -204,7 +204,7 @@ export default function EmailDetail({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       toast.success(`Đang tải xuống ${filename}`);
     } catch (error) {
       console.error("Download failed:", error);

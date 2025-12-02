@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import   StarIcon  from "@/assets/star.svg?react";
+
 
 interface EmailListProps {
   mailboxId: string | null;
@@ -127,33 +129,32 @@ export default function EmailList({
     }
   };
 
-  const toggleStarMutation = useMutation({
-    mutationFn: emailService.toggleStar,
-    onMutate: async (emailId) => {
-      // Cancel outgoing queries to prevent overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ["emails"] });
-      await queryClient.cancelQueries({ queryKey: ["email", emailId] });
-      
-      const previousData = queryClient.getQueryData(["emails", mailboxId, offset, debouncedSearchQuery]);
+    const toggleStarMutation = useMutation({
+        mutationFn: emailService.toggleStar,
+        onMutate: async ( emailId) => {
+            // Cancel outgoing queries to prevent overwriting optimistic update
+            await queryClient.cancelQueries({ queryKey: ["emails"] });
+                await queryClient.cancelQueries({ queryKey: ["email", emailId] });
 
-      // Update all email list caches (including current page)
+      const previousData = queryClient.getQueryData(["emails", mailboxId, offset, debouncedSearchQuery]);
+        // Update all email list caches (including current page)
       queryClient.setQueriesData<EmailsResponse>(
         { queryKey: ["emails"] },
         (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            emails: old.emails.map((email: Email) =>
-              email.id === emailId
-                ? { ...email, is_starred: !email.is_starred }
-                : email
-            ),
-          };
-        }
-      );
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        emails: old.emails.map((email: Email) =>
+                            email.id === emailId
+                                ? { ...email, is_starred: !email.is_starred }
+                                : email
+                        ),
+                    };
+                }
+            );
 
-      // Update email detail cache
-      queryClient.setQueryData<Email>(
+            // Update email detail cache
+            queryClient.setQueryData<Email>(
         ["email", emailId],
         (old) => {
           if (!old) return old;
@@ -165,8 +166,8 @@ export default function EmailList({
       );
 
       return { previousData, emailId };
-    },
-    onError: (_err, emailId, context) => {
+        },
+        onError: (_err, emailId, context) => {
       // Restore previous data on error
       if (context?.previousData) {
         queryClient.setQueryData(
@@ -174,13 +175,13 @@ export default function EmailList({
           context.previousData
         );
       }
-      toast.error("Không thể cập nhật trạng thái đánh dấu sao");
+            toast.error("Không thể cập nhật trạng thái đánh dấu sao");
       // Refetch all to restore correct state
-      queryClient.invalidateQueries({ queryKey: ["emails"] });
+        queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["email", emailId] });
     },
     // Don't use onSettled - let the optimistic update persist
-  });
+    });
 
   const getTimeDisplay = (date: string) => {
     const emailDate = new Date(date);
@@ -314,9 +315,11 @@ export default function EmailList({
             const isSelected = selectedEmailId === email.id;
             const isChecked = selectedIds.has(email.id);
             const showCheckbox = selectedIds.size > 0;
-            
+
             // Check if this email is being toggled
             const isTogglingThis = toggleStarMutation.isPending && toggleStarMutation.variables === email.id;
+
+            const isUnread = !email.is_read && !isSelected && !isChecked;
 
             return (
               <div
@@ -325,11 +328,11 @@ export default function EmailList({
                 className={cn(
                   "group flex items-start gap-3 p-3 border-b border-gray-200 dark:border-gray-700 cursor-pointer transition-colors",
                   isSelected || isChecked
-                    ? "bg-primary/10 border-l-2 border-l-primary"
+                    ? "bg-primary/10 "
                     : "hover:bg-gray-50 dark:hover:bg-[#111418]",
-                  !email.is_read && !isSelected && !isChecked
-                    ? "bg-gray-50 dark:bg-[#1a222d]"
-                    : ""
+                  isUnread
+                    ? "bg-blue-50 dark:bg-blue-900/30 border-l-4 border-l-blue-500"
+                    : "",
                 )}
               >
                 <div className="relative flex items-center justify-center shrink-0 w-10 h-10">
@@ -364,10 +367,12 @@ export default function EmailList({
                   <div className="flex justify-between items-center mb-0.5">
                     <p
                       className={cn(
-                        "text-sm font-semibold truncate",
+                        "text-sm truncate",
                         isSelected
-                          ? "text-primary dark:text-blue-300"
-                          : "text-gray-900 dark:text-white"
+                          ? "text-primary dark:text-blue-300 font-semibold"
+                          : isUnread
+                          ? "text-blue-700 dark:text-blue-200 font-bold"
+                          : "text-gray-900 dark:text-white font-semibold"
                       )}
                     >
                       {email.subject || "(No Subject)"}
@@ -377,13 +382,18 @@ export default function EmailList({
                         "text-[11px] shrink-0 ml-2",
                         isSelected
                           ? "text-primary dark:text-blue-300"
+                          : isUnread
+                          ? "text-blue-300 dark:text-blue-200 font-bold"
                           : "text-gray-500 dark:text-gray-400"
                       )}
                     >
                       {getTimeDisplay(email.received_at)}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-300 truncate font-medium mb-0.5">
+                  <p className={cn(
+                    "text-xs truncate font-medium mb-0.5",
+                    isUnread ? "text-blue-700 dark:text-blue-200 font-bold" : "text-gray-600 dark:text-gray-300"
+                  )}>
                     {email.from_name || email.from}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
@@ -406,16 +416,13 @@ export default function EmailList({
                       progress_activity
                     </span>
                   ) : (
-                    <span
-                      className={cn(
-                        "material-symbols-outlined text-[18px] [font-variation-settings:'wght'_300]",
-                        email.is_starred
-                          ? "filled text-yellow-400"
-                          : "text-gray-400 dark:text-gray-500"
-                      )}
-                    >
-                      star
-                    </span>
+                      <StarIcon
+                          className={cn(
+                              "size-7 cursor-pointer",
+                              email.is_starred ? "text-yellow-400 fill-yellow-400" : "text-gray-400 fill-gray-400 dark:text-gray-500 dark:fill-gray-500"
+                          )}
+                      />
+
                   )}
                 </Button>
               </div>

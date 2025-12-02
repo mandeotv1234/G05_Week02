@@ -280,13 +280,13 @@ func (u *authUsecase) generateTokens(user *authdomain.User) (*authdto.TokenRespo
 		return nil, err
 	}
 
-	// Store refresh token
+	// Use repository ReplaceRefreshToken to atomically replace any existing token for this user
 	refreshTokenEntity := &authdomain.RefreshToken{
 		Token:     refreshToken,
 		UserID:    user.ID,
 		ExpiresAt: time.Now().Add(u.config.JWTRefreshExpiry),
 	}
-	if err := u.userRepo.SaveRefreshToken(refreshTokenEntity); err != nil {
+	if err := u.userRepo.ReplaceRefreshToken(refreshTokenEntity); err != nil {
 		return nil, err
 	}
 

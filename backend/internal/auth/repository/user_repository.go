@@ -79,6 +79,25 @@ func (r *userRepository) DeleteRefreshToken(token string) error {
 	return r.db.Where("token = ?", token).Delete(&authdomain.RefreshToken{}).Error
 }
 
+func (r *userRepository) DeleteRefreshTokensByUser(userID string) error {
+	return r.db.Where("user_id = ?", userID).Delete(&authdomain.RefreshToken{}).Error
+}
+
+// ReplaceRefreshToken replaces any existing refresh tokens for the user and inserts the new one.
+// We implement this as a transaction: delete existing tokens for user_id then insert the new token.
+// This avoids requiring an ON CONFLICT unique constraint on user_id.
+func (r *userRepository) ReplaceRefreshToken(token *authdomain.RefreshToken) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", token.UserID).Delete(&authdomain.RefreshToken{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(token).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 // HashPassword hashes a password using bcrypt
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

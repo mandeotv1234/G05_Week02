@@ -11,4 +11,6 @@ type UserRepository interface {
 	SaveRefreshToken(token *authdomain.RefreshToken) error
 	FindRefreshToken(token string) (*authdomain.RefreshToken, error)
 	DeleteRefreshToken(token string) error
+	DeleteRefreshTokensByUser(userId string) error
+	ReplaceRefreshToken(token *authdomain.RefreshToken) error
 }

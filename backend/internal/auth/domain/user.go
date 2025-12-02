@@ -18,6 +18,6 @@ type User struct {
 
 type RefreshToken struct {
 	Token     string    `json:"token" gorm:"primaryKey"`
-	UserID    string    `json:"user_id" gorm:"index"`
+	UserID    string    `json:"user_id" gorm:"uniqueIndex"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
