@@ -1,4 +1,3 @@
-// frontend/src/routes/PrivateRoute.tsx
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
