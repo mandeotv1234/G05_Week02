@@ -37,3 +37,12 @@ vendor/
 backend/service-account.json
 frontend/.vscode/mcp.json
 *.env
+.env
+bạckend/.env
+frontend/node_modules/
+frontend/build/
+frontend/.env
+.DS_Store
+logs/
+*.log
+.idea
