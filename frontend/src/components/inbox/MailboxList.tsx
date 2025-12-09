@@ -145,7 +145,7 @@ export default function MailboxList({
           onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
           className="flex items-center justify-between gap-2 w-full hover:bg-gray-200 dark:hover:bg-white/5 p-1.5 h-auto rounded-lg transition-colors text-left group shadow-none"
         >
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <div
               className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-8 shrink-0"
               style={{
@@ -155,16 +155,19 @@ export default function MailboxList({
                 }")`,
               }}
             ></div>
-            <div className="flex flex-col min-w-0 items-start">
-              <h1 className="text-gray-900 dark:text-white text-sm font-medium leading-normal truncate">
-                Email Client AI
+            <div className="flex flex-col min-w-0 items-start flex-1">
+              <h1 className="text-gray-900 dark:text-white text-sm font-medium leading-normal truncate w-full">
+                {user?.name || "Email Client AI"}
               </h1>
-              <p className="text-gray-500 dark:text-[#9dabb9] text-xs font-normal leading-normal truncate">
+              <p
+                className="text-gray-500 dark:text-[#9dabb9] text-xs font-normal leading-normal truncate w-full"
+                title={user?.email || "user@email.com"}
+              >
                 {user?.email || "user@email.com"}
               </p>
             </div>
           </div>
-          <span className="material-symbols-outlined text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors text-lg">
+          <span className="material-symbols-outlined text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors text-lg shrink-0">
             expand_more
           </span>
         </Button>

@@ -1,16 +1,23 @@
-
 export type KanbanToggleProps = {
   isKanban: boolean;
   onToggle: () => void;
 };
 
-export default function KanbanToggle({ isKanban, onToggle }: KanbanToggleProps) {
+export default function KanbanToggle({
+  isKanban,
+  onToggle,
+}: KanbanToggleProps) {
   return (
     <button
-      className="px-3 py-1 rounded bg-blue-500 text-white font-semibold hover:bg-blue-600 transition"
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-linear-to-r from-blue-400 to-blue-500 dark:from-blue-600 dark:to-blue-700 text-white text-xs font-semibold hover:from-blue-600 hover:to-blue-700 dark:hover:from-blue-700 dark:hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md"
       onClick={onToggle}
     >
-      {isKanban ? "Chuyển về chế độ truyền thống" : "Chuyển sang Kanban"}
+      <span className="material-symbols-outlined text-[16px]">
+        {isKanban ? "view_list" : "view_kanban"}
+      </span>
+      <span className="hidden sm:inline">
+        {isKanban ? "Truyền thống" : "Kanban"}
+      </span>
     </button>
   );
 }

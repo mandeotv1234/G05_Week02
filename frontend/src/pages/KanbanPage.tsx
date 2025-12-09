@@ -349,7 +349,12 @@ export default function KanbanPage() {
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-[#111418] text-gray-900 dark:text-white overflow-hidden font-sans transition-colors duration-200">
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111418]">
-        <span className="font-bold text-lg">MailApp - Kanban</span>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-linear-to-br text-white from-blue-400 to-blue-500 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center shadow-md">
+            <span className="material-symbols-outlined text-white text-[20px]">mail</span>
+          </div>
+          <span className="text-xl bg-linear-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">Email Client AI - Kanban</span>
+        </div>
         <KanbanToggle isKanban={true} onToggle={() => navigate("/inbox")} />
       </div>
       <div className="flex-1 overflow-auto">
