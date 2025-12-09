@@ -13,20 +13,64 @@ import (
 
 // emailUsecase implements EmailUsecase interface
 type emailUsecase struct {
-	emailRepo    repository.EmailRepository
-	userRepo     authrepo.UserRepository
-	mailProvider emaildomain.MailProvider
-	topicName    string
+	emailRepo     repository.EmailRepository
+	userRepo      authrepo.UserRepository
+	mailProvider  emaildomain.MailProvider
+	topicName     string
+	geminiService interface {
+		SummarizeEmail(ctx context.Context, emailText string) (string, error)
+	}
+	kanbanStatus map[string]string // emailID -> status
+}
+
+// SetGeminiService allows wiring GeminiService after creation
+func (u *emailUsecase) SetGeminiService(svc interface {
+	SummarizeEmail(ctx context.Context, emailText string) (string, error)
+}) {
+	u.geminiService = svc
 }
 
 // NewEmailUsecase creates a new instance of emailUsecase
 func NewEmailUsecase(emailRepo repository.EmailRepository, userRepo authrepo.UserRepository, mailProvider emaildomain.MailProvider, topicName string) EmailUsecase {
+	// GeminiService cần được truyền vào khi khởi tạo
 	return &emailUsecase{
-		emailRepo:    emailRepo,
-		userRepo:     userRepo,
-		mailProvider: mailProvider,
-		topicName:    topicName,
+		emailRepo:     emailRepo,
+		userRepo:      userRepo,
+		mailProvider:  mailProvider,
+		topicName:     topicName,
+		geminiService: nil, // cần set sau
+		kanbanStatus:  make(map[string]string),
 	}
+}
+
+// Lấy summary email qua Gemini
+func (u *emailUsecase) SummarizeEmail(ctx context.Context, emailID string) (string, error) {
+	// Lấy userID từ context nếu có
+	var userID string
+	if v := ctx.Value("userID"); v != nil {
+		if s, ok := v.(string); ok {
+			userID = s
+		}
+	}
+
+	var email *emaildomain.Email
+	var err error
+	accessToken, refreshToken, _ := u.getUserTokens(userID)
+	if accessToken != "" && u.mailProvider != nil {
+		// Lấy email từ Gmail API
+		email, err = u.mailProvider.GetEmailByID(ctx, accessToken, refreshToken, emailID, u.makeTokenUpdateCallback(userID))
+	} else {
+		// Fallback mock
+		email, err = u.emailRepo.GetEmailByID(emailID)
+	}
+	if err != nil || email == nil {
+		return "", fmt.Errorf("Email not found")
+	}
+	if u.geminiService == nil {
+		return "", fmt.Errorf("Gemini service not configured")
+	}
+	prompt := "Hãy tóm tắt nội dung email sau bằng tiếng Việt, chỉ nêu ý chính, không thêm nhận xét cá nhân: " + email.Body
+	return u.geminiService.SummarizeEmail(ctx, prompt)
 }
 
 func (u *emailUsecase) getUserTokens(userID string) (string, string, error) {
@@ -55,7 +99,7 @@ func (u *emailUsecase) makeTokenUpdateCallback(userID string) emaildomain.TokenU
 			user.RefreshToken = token.RefreshToken
 		}
 		user.TokenExpiry = token.Expiry
-		
+
 		return u.userRepo.Update(user)
 	}
 }
@@ -65,12 +109,12 @@ func (u *emailUsecase) GetAllMailboxes(userID string) ([]*emaildomain.Mailbox, e
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if accessToken == "" {
 		// Fallback to local storage if no access token
 		return u.emailRepo.GetAllMailboxes()
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.GetMailboxes(ctx, accessToken, refreshToken, u.makeTokenUpdateCallback(userID))
 }
@@ -84,12 +128,12 @@ func (u *emailUsecase) GetEmailsByMailbox(userID, mailboxID string, limit, offse
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	if accessToken == "" {
 		// Fallback to local storage if no access token
 		return u.emailRepo.GetEmailsByMailbox(mailboxID, limit, offset)
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.GetEmails(ctx, accessToken, refreshToken, mailboxID, limit, offset, query, u.makeTokenUpdateCallback(userID))
 }
@@ -99,11 +143,11 @@ func (u *emailUsecase) GetAttachment(userID, messageID, attachmentID string) (*e
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	if accessToken == "" {
 		return nil, nil, nil // Not supported for local storage yet
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.GetAttachment(ctx, accessToken, refreshToken, messageID, attachmentID, u.makeTokenUpdateCallback(userID))
 }
@@ -113,12 +157,12 @@ func (u *emailUsecase) GetEmailByID(userID, id string) (*emaildomain.Email, erro
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if accessToken == "" {
 		// Fallback to local storage if no access token
 		return u.emailRepo.GetEmailByID(id)
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.GetEmailByID(ctx, accessToken, refreshToken, id, u.makeTokenUpdateCallback(userID))
 }
@@ -128,7 +172,7 @@ func (u *emailUsecase) MarkEmailAsRead(userID, id string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if accessToken == "" {
 		// Fallback to local storage if no access token
 		email, err := u.emailRepo.GetEmailByID(id)
@@ -141,7 +185,7 @@ func (u *emailUsecase) MarkEmailAsRead(userID, id string) error {
 		email.IsRead = true
 		return u.emailRepo.UpdateEmail(email)
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.MarkAsRead(ctx, accessToken, refreshToken, id, u.makeTokenUpdateCallback(userID))
 }
@@ -151,7 +195,7 @@ func (u *emailUsecase) MarkEmailAsUnread(userID, id string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if accessToken == "" {
 		// Fallback to local storage if no access token
 		email, err := u.emailRepo.GetEmailByID(id)
@@ -164,7 +208,7 @@ func (u *emailUsecase) MarkEmailAsUnread(userID, id string) error {
 		email.IsRead = false
 		return u.emailRepo.UpdateEmail(email)
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.MarkAsUnread(ctx, accessToken, refreshToken, id, u.makeTokenUpdateCallback(userID))
 }
@@ -174,7 +218,7 @@ func (u *emailUsecase) ToggleStar(userID, id string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if accessToken == "" {
 		// Fallback to local storage if no access token
 		email, err := u.emailRepo.GetEmailByID(id)
@@ -187,7 +231,7 @@ func (u *emailUsecase) ToggleStar(userID, id string) error {
 		email.IsStarred = !email.IsStarred
 		return u.emailRepo.UpdateEmail(email)
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.ToggleStar(ctx, accessToken, refreshToken, id, u.makeTokenUpdateCallback(userID))
 }
@@ -200,11 +244,11 @@ func (u *emailUsecase) SendEmail(userID, to, cc, bcc, subject, body string, file
 	if user == nil {
 		return fmt.Errorf("user not found")
 	}
-	
+
 	if user.AccessToken == "" {
 		return nil // Not supported for local storage yet
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.SendEmail(ctx, user.AccessToken, user.RefreshToken, user.Name, user.Email, to, cc, bcc, subject, body, files, u.makeTokenUpdateCallback(userID))
 }
@@ -214,12 +258,12 @@ func (u *emailUsecase) TrashEmail(userID, id string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if accessToken == "" {
 		// Fallback to local storage
 		return nil
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.TrashEmail(ctx, accessToken, refreshToken, id, u.makeTokenUpdateCallback(userID))
 }
@@ -229,12 +273,12 @@ func (u *emailUsecase) ArchiveEmail(userID, id string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if accessToken == "" {
 		// Fallback to local storage
 		return nil
 	}
-	
+
 	ctx := context.Background()
 	return u.mailProvider.ArchiveEmail(ctx, accessToken, refreshToken, id, u.makeTokenUpdateCallback(userID))
 }
@@ -244,13 +288,69 @@ func (u *emailUsecase) WatchMailbox(userID string) error {
 	if err != nil {
 		return err
 	}
-	
 	if accessToken == "" {
 		// Fallback to local storage
 		return nil
 	}
-	
 	ctx := context.Background()
 	return u.mailProvider.Watch(ctx, accessToken, refreshToken, u.topicName, u.makeTokenUpdateCallback(userID))
 }
 
+// Move email to another mailbox (Kanban drag & drop)
+func (u *emailUsecase) MoveEmailToMailbox(userID, emailID, mailboxID string) error {
+	accessToken, _, err := u.getUserTokens(userID)
+	if err != nil {
+		return err
+	}
+	if accessToken == "" {
+		// Fallback to local storage
+		email, err := u.emailRepo.GetEmailByID(emailID)
+		if err != nil {
+			return err
+		}
+		if email == nil {
+			return nil
+		}
+		email.MailboxID = mailboxID
+		return u.emailRepo.UpdateEmail(email)
+	}
+	// Nếu là email thật từ Gmail, lưu trạng thái Kanban vào map
+	u.kanbanStatus[emailID] = mailboxID // mailboxID ở đây là status Kanban
+	return nil
+}
+
+// GetEmailsByStatus returns emails by status (for Kanban columns)
+func (u *emailUsecase) GetEmailsByStatus(userID, status string, limit, offset int) ([]*emaildomain.Email, int, error) {
+	accessToken, refreshToken, err := u.getUserTokens(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if accessToken == "" {
+		// Fallback to local storage if no access token
+		return u.emailRepo.GetEmailsByStatus(status, limit, offset)
+	}
+
+	ctx := context.Background()
+	// Chỉ lấy đúng số lượng email từ Gmail theo limit và offset truyền vào
+	emails, total, err := u.mailProvider.GetEmails(ctx, accessToken, refreshToken, "INBOX", limit, offset, "", u.makeTokenUpdateCallback(userID))
+	if err != nil {
+		return nil, 0, err
+	}
+	var filtered []*emaildomain.Email
+	if status == "inbox" {
+		for _, email := range emails {
+			s, ok := u.kanbanStatus[email.ID]
+			if !ok || s == "inbox" {
+				filtered = append(filtered, email)
+			}
+		}
+	} else {
+		for _, email := range emails {
+			if s, ok := u.kanbanStatus[email.ID]; ok && s == status {
+				filtered = append(filtered, email)
+			}
+		}
+	}
+	return filtered, total, nil
+}

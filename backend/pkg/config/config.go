@@ -8,22 +8,23 @@ import (
 )
 
 type Config struct {
-	Port                string
-	JWTSecret           string
+	Port               string
+	JWTSecret          string
 	JWTAccessExpiry    time.Duration
-	JWTRefreshExpiry    time.Duration
-	GoogleClientID      string
-	GoogleClientSecret  string
-	GoogleRedirectURI   string
-	GoogleProjectID     string
-	GooglePubSubTopic   string
-	GoogleCredentials   string // Path to service account JSON
-	DBHost              string
-	DBPort              string
-	DBUser              string
-	DBPassword          string
-	DBName              string
-	DBSSLMode           string
+	JWTRefreshExpiry   time.Duration
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURI  string
+	GoogleProjectID    string
+	GooglePubSubTopic  string
+	GoogleCredentials  string // Path to service account JSON
+	DBHost             string
+	DBPort             string
+	DBUser             string
+	DBPassword         string
+	DBName             string
+	DBSSLMode          string
+	GeminiApiKey       string
 }
 
 func Load() *Config {
@@ -61,6 +62,7 @@ func Load() *Config {
 		DBPassword:         getEnv("DB_PASSWORD", "postgres"),
 		DBName:             getEnv("DB_NAME", "email_dashboard"),
 		DBSSLMode:          getEnv("DB_SSLMODE", "disable"),
+		GeminiApiKey:       os.Getenv("GEMINI_API_KEY"),
 	}
 }
 
@@ -70,4 +72,3 @@ func getEnv(key, defaultValue string) string {
 	}
 	return defaultValue
 }
-

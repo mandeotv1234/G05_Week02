@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strconv"
@@ -16,6 +17,54 @@ type EmailHandler struct {
 	emailUsecase usecase.EmailUsecase
 }
 
+// GET /emails/:id/summary
+func (h *EmailHandler) SummarizeEmail(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+	user, exists := c.Get("user")
+	var userID string
+	if exists {
+		if u, ok := user.(*authdomain.User); ok {
+			userID = u.ID
+		}
+	}
+	ctx = context.WithValue(ctx, "userID", userID)
+	summary, err := h.emailUsecase.SummarizeEmail(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"summary": summary})
+}
+
+// PATCH /emails/:id/mailbox
+func (h *EmailHandler) MoveEmailToMailbox(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		MailboxID string `json:"mailbox_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.MailboxID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing mailbox_id"})
+		return
+	}
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	userID := userData.ID
+	if err := h.emailUsecase.MoveEmailToMailbox(userID, id, req.MailboxID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "email moved", "mailbox_id": req.MailboxID})
+}
+
 func NewEmailHandler(emailUsecase usecase.EmailUsecase) *EmailHandler {
 	return &EmailHandler{
 		emailUsecase: emailUsecase,
@@ -28,15 +77,15 @@ func (h *EmailHandler) GetAllMailboxes(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
-	
+
 	mailboxes, err := h.emailUsecase.GetAllMailboxes(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -70,13 +119,13 @@ func (h *EmailHandler) GetEmailsByMailbox(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
 
 	limit := 20
@@ -112,21 +161,21 @@ func (h *EmailHandler) GetEmailsByMailbox(c *gin.Context) {
 
 func (h *EmailHandler) GetEmailByID(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	user, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
-	
+
 	email, err := h.emailUsecase.GetEmailByID(userID, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -146,21 +195,21 @@ func (h *EmailHandler) GetEmailByID(c *gin.Context) {
 
 func (h *EmailHandler) MarkAsRead(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	user, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
-	
+
 	if err := h.emailUsecase.MarkEmailAsRead(userID, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -171,21 +220,21 @@ func (h *EmailHandler) MarkAsRead(c *gin.Context) {
 
 func (h *EmailHandler) MarkAsUnread(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	user, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
-	
+
 	if err := h.emailUsecase.MarkEmailAsUnread(userID, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -196,21 +245,21 @@ func (h *EmailHandler) MarkAsUnread(c *gin.Context) {
 
 func (h *EmailHandler) ToggleStar(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	user, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
-	
+
 	if err := h.emailUsecase.ToggleStar(userID, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -231,13 +280,13 @@ func (h *EmailHandler) SendEmail(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
 
 	if err := h.emailUsecase.SendEmail(userID, req.To, req.Cc, req.Bcc, req.Subject, req.Body, req.Files); err != nil {
@@ -250,19 +299,19 @@ func (h *EmailHandler) SendEmail(c *gin.Context) {
 
 func (h *EmailHandler) TrashEmail(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	user, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
 
 	if err := h.emailUsecase.TrashEmail(userID, id); err != nil {
@@ -275,19 +324,19 @@ func (h *EmailHandler) TrashEmail(c *gin.Context) {
 
 func (h *EmailHandler) ArchiveEmail(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	user, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
 
 	if err := h.emailUsecase.ArchiveEmail(userID, id); err != nil {
@@ -304,15 +353,15 @@ func (h *EmailHandler) WatchMailbox(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
-	
+
 	// Log the watch request
 	log.Printf("Received watch request for user: %s", userID)
 
@@ -336,13 +385,13 @@ func (h *EmailHandler) GetAttachment(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 		return
 	}
-	
+
 	userData, ok := user.(*authdomain.User)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
 		return
 	}
-	
+
 	userID := userData.ID
 
 	attachment, data, err := h.emailUsecase.GetAttachment(userID, messageID, attachmentID)
@@ -355,3 +404,45 @@ func (h *EmailHandler) GetAttachment(c *gin.Context) {
 	c.Data(http.StatusOK, attachment.MimeType, data)
 }
 
+// GET /emails/status/:status
+func (h *EmailHandler) GetEmailsByStatus(c *gin.Context) {
+	status := c.Param("status")
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	userID := userData.ID
+
+	limit := 20
+	offset := 0
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if parsed, err := strconv.Atoi(offsetStr); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	emails, total, err := h.emailUsecase.GetEmailsByStatus(userID, status, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, emaildto.EmailsResponse{
+		Emails: emails,
+		Limit:  limit,
+		Offset: offset,
+		Total:  total,
+	})
+}

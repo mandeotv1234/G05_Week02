@@ -2,6 +2,26 @@ import apiClient from "@/lib/api-client";
 import type { Mailbox, Email, EmailsResponse } from "@/types/email";
 
 export const emailService = {
+  getEmailsByStatus: async (
+    status: string,
+    limit = 50,
+    offset = 0
+  ): Promise<EmailsResponse> => {
+    const response = await apiClient.get<EmailsResponse>(
+      `/emails/status/${status}`,
+      {
+        params: { limit, offset },
+      }
+    );
+    return response.data;
+  },
+  getEmailSummary: async (emailId: string): Promise<string> => {
+    const response = await apiClient.get<{ summary: string }>(`/emails/${emailId}/summary`);
+    return response.data.summary;
+  },
+  moveEmailToMailbox: async (emailId: string, mailboxId: string): Promise<void> => {
+    await apiClient.patch(`/emails/${emailId}/mailbox`, { mailbox_id: mailboxId });
+  },
   getAllMailboxes: async (): Promise<Mailbox[]> => {
     const response = await apiClient.get<{ mailboxes: Mailbox[] }>(
       "/emails/mailboxes"

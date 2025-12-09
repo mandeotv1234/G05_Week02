@@ -7,7 +7,7 @@ type EmailRepository interface {
 	GetAllMailboxes() ([]*emaildomain.Mailbox, error)
 	GetMailboxByID(id string) (*emaildomain.Mailbox, error)
 	GetEmailsByMailbox(mailboxID string, limit, offset int) ([]*emaildomain.Email, int, error)
+	GetEmailsByStatus(status string, limit, offset int) ([]*emaildomain.Email, int, error)
 	GetEmailByID(id string) (*emaildomain.Email, error)
 	UpdateEmail(email *emaildomain.Email) error
 }
-

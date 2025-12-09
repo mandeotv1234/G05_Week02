@@ -39,6 +39,9 @@ func (r *emailRepository) initMockMailboxes() {
 		{ID: "drafts", Name: "Drafts", Type: "drafts", Count: 1},
 		{ID: "archive", Name: "Archive", Type: "archive", Count: 0},
 		{ID: "trash", Name: "Trash", Type: "trash", Count: 0},
+		{ID: "todo", Name: "To Do", Type: "todo", Count: 0},
+		{ID: "done", Name: "Done", Type: "done", Count: 0},
+		{ID: "snoozed", Name: "Snoozed", Type: "snoozed", Count: 0},
 	}
 
 	for _, mb := range mailboxes {
@@ -110,15 +113,33 @@ func (r *emailRepository) initMockEmails() {
 		subject := subjects[i%len(subjects)]
 		preview := previews[i%len(previews)]
 
+		// Phân phối email cho các cột Kanban
+		var mailboxID, status string
+		switch {
+		case i < 20:
+			mailboxID = "inbox"
+			status = "inbox"
+		case i < 30:
+			mailboxID = "todo"
+			status = "todo"
+		case i < 40:
+			mailboxID = "done"
+			status = "done"
+		default:
+			mailboxID = "snoozed"
+			status = "snoozed"
+		}
+
 		emails = append(emails, &emaildomain.Email{
 			ID:          uuid.New().String(),
-			MailboxID:   "inbox",
+			MailboxID:   mailboxID,
+			Status:      status,
 			From:        sender.email,
 			FromName:    sender.name,
 			To:          []string{"user@example.com"},
 			Subject:     subject + fmt.Sprintf(" #%d", i+1),
 			Preview:     preview,
-			Body:        fmt.Sprintf("<p>%s</p><p>This is email #%d in your inbox.</p>", preview, i+1),
+			Body:        fmt.Sprintf("<p>%s</p><p>This is email #%d in your %s.</p>", preview, i+1, mailboxID),
 			IsHTML:      true,
 			IsRead:      i%3 == 0, // Every 3rd email is read
 			IsStarred:   i%5 == 0, // Every 5th email is starred
@@ -295,3 +316,38 @@ func (r *emailRepository) UpdateEmail(email *emaildomain.Email) error {
 	return nil
 }
 
+// GetEmailsByStatus returns emails by status (for Kanban columns)
+func (r *emailRepository) GetEmailsByStatus(status string, limit, offset int) ([]*emaildomain.Email, int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var result []*emaildomain.Email
+	for _, email := range r.emails {
+		if email.Status == status {
+			result = append(result, email)
+		}
+	}
+
+	// Sort by received_at descending (newest first)
+	for i := 0; i < len(result)-1; i++ {
+		for j := i + 1; j < len(result); j++ {
+			if result[i].ReceivedAt.Before(result[j].ReceivedAt) {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	total := len(result)
+
+	// Simple pagination
+	if offset >= len(result) {
+		return []*emaildomain.Email{}, total, nil
+	}
+
+	end := offset + limit
+	if end > len(result) {
+		end = len(result)
+	}
+
+	return result[offset:end], total, nil
+}

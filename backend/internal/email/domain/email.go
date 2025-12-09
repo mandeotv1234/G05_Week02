@@ -12,6 +12,7 @@ type Mailbox struct {
 type Email struct {
 	ID          string       `json:"id"`
 	MailboxID   string       `json:"mailbox_id"`
+	Status      string       `json:"status"` // inbox, todo, done, snoozed
 	From        string       `json:"from"`
 	FromName    string       `json:"from_name"`
 	To          []string     `json:"to"`

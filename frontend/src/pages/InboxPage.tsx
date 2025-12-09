@@ -10,11 +10,55 @@ import MailboxList from "@/components/inbox/MailboxList";
 import EmailList from "@/components/inbox/EmailList";
 import EmailDetail from "@/components/inbox/EmailDetail";
 import ComposeEmail from "@/components/inbox/ComposeEmail";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/config/api";
-import { Button } from "@/components/ui/button";
+import KanbanBoard from "@/components/kanban/KanbanBoard";
+import type { KanbanColumn } from "@/components/kanban/KanbanBoard";
+
+import KanbanToggle from "@/components/kanban/KanbanToggle";
 
 export default function InboxPage() {
+  // State cho popup chi tiết email
+  const [detailEmailId, setDetailEmailId] = useState<string | null>(null);
+  const { data: summary, isFetching: isSummaryLoading } = useQuery({
+    queryKey: ["email-summary", detailEmailId],
+    queryFn: async () => {
+      if (!detailEmailId) return "";
+      return emailService.getEmailSummary(detailEmailId);
+    },
+    enabled: !!detailEmailId,
+  });
+  // Snooze mutation
+  const snoozeEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      await emailService.moveEmailToMailbox(emailId, "snoozed");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+    },
+  });
+
+  // Wake up mutation
+  const wakeUpEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      await emailService.moveEmailToMailbox(emailId, "inbox");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+    },
+  });
+
+  // Mutation cho kéo thả Kanban
+  const moveEmailMutation = useMutation({
+    mutationFn: async ({ emailId, mailboxId }: { emailId: string; mailboxId: string }) => {
+      await emailService.moveEmailToMailbox(emailId, mailboxId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+    },
+  });
+  // Kanban mode state
+  const [isKanban, setIsKanban] = useState(false);
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
@@ -24,8 +68,6 @@ export default function InboxPage() {
     emailId?: string;
   }>();
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeInitialData, setComposeInitialData] = useState({
     to: [] as string[],
@@ -67,6 +109,126 @@ export default function InboxPage() {
 
   // Use URL params or default to 'inbox'
   const selectedMailboxId = mailbox || "inbox";
+  // State phân trang cho từng cột Kanban
+  const [kanbanOffsets, setKanbanOffsets] = useState({
+    inbox: 0,
+    todo: 0,
+    done: 0,
+    snoozed: 0,
+  });
+  const limit = 20;
+
+  // State emails cho từng cột (optimistic update)
+  const [kanbanEmails, setKanbanEmails] = useState({
+    inbox: [] as Email[],
+    todo: [] as Email[],
+    done: [] as Email[],
+    snoozed: [] as Email[],
+  });
+
+  // Query từng cột
+  const { data: inboxData, refetch: refetchInbox } = useQuery({
+    queryKey: ["emails", "kanban", "inbox", kanbanOffsets.inbox],
+    queryFn: () => emailService.getEmailsByStatus("inbox", limit, kanbanOffsets.inbox),
+    enabled: isKanban,
+  });
+  const { data: todoData, refetch: refetchTodo } = useQuery({
+    queryKey: ["emails", "kanban", "todo", kanbanOffsets.todo],
+    queryFn: () => emailService.getEmailsByStatus("todo", limit, kanbanOffsets.todo),
+    enabled: isKanban,
+  });
+  const { data: doneData, refetch: refetchDone } = useQuery({
+    queryKey: ["emails", "kanban", "done", kanbanOffsets.done],
+    queryFn: () => emailService.getEmailsByStatus("done", limit, kanbanOffsets.done),
+    enabled: isKanban,
+  });
+  const { data: snoozedData, refetch: refetchSnoozed } = useQuery({
+    queryKey: ["emails", "kanban", "snoozed", kanbanOffsets.snoozed],
+    queryFn: () => emailService.getEmailsByStatus("snoozed", limit, kanbanOffsets.snoozed),
+    enabled: isKanban,
+  });
+
+  // Update kanbanEmails state when query data changes
+  useEffect(() => {
+    if (inboxData?.emails) setKanbanEmails((prev) => ({ ...prev, inbox: inboxData.emails }));
+  }, [inboxData]);
+  useEffect(() => {
+    if (todoData?.emails) setKanbanEmails((prev) => ({ ...prev, todo: todoData.emails }));
+  }, [todoData]);
+  useEffect(() => {
+    if (doneData?.emails) setKanbanEmails((prev) => ({ ...prev, done: doneData.emails }));
+  }, [doneData]);
+  useEffect(() => {
+    if (snoozedData?.emails) setKanbanEmails((prev) => ({ ...prev, snoozed: snoozedData.emails }));
+  }, [snoozedData]);
+
+  // Hàm chuyển trang cho từng cột
+  const handleKanbanPage = (col: keyof typeof kanbanOffsets, dir: 1 | -1) => {
+    setKanbanOffsets((prev) => ({ ...prev, [col]: Math.max(0, prev[col] + dir * limit) }));
+  };
+
+  // Optimistic update khi kéo thả
+  const handleKanbanDrop = (emailId: string, targetColumnId: string) => {
+    setKanbanEmails((prev) => {
+      // Tìm email trong tất cả các cột
+      let movedEmail: Email | undefined;
+      const newEmails = Object.fromEntries(
+        Object.entries(prev).map(([col, emails]) => {
+          const filtered = emails.filter((e) => {
+            if (e.id === emailId) {
+              movedEmail = e;
+              return false;
+            }
+            return true;
+          });
+          return [col, filtered];
+        })
+      ) as typeof prev;
+      // Thêm email vào cột mới
+      if (movedEmail) {
+        newEmails[targetColumnId as keyof typeof newEmails] = [movedEmail, ...newEmails[targetColumnId as keyof typeof newEmails]];
+      }
+      return newEmails;
+    });
+    // Call API ngầm
+    moveEmailMutation.mutate({ emailId, mailboxId: targetColumnId });
+    // Refetch lại dữ liệu cột đích và cột nguồn
+    if (targetColumnId === "inbox") refetchInbox();
+    if (targetColumnId === "todo") refetchTodo();
+    if (targetColumnId === "done") refetchDone();
+    if (targetColumnId === "snoozed") refetchSnoozed();
+  };
+
+  const kanbanColumns: KanbanColumn[] = [
+    {
+      id: "inbox",
+      title: "Inbox",
+      emails: kanbanEmails.inbox,
+      offset: kanbanOffsets.inbox,
+      limit,
+    },
+    {
+      id: "todo",
+      title: "To Do",
+      emails: kanbanEmails.todo,
+      offset: kanbanOffsets.todo,
+      limit,
+    },
+    {
+      id: "done",
+      title: "Done",
+      emails: kanbanEmails.done,
+      offset: kanbanOffsets.done,
+      limit,
+    },
+    {
+      id: "snoozed",
+      title: "Snoozed",
+      emails: kanbanEmails.snoozed,
+      offset: kanbanOffsets.snoozed,
+      limit,
+    },
+  ];
   const selectedEmailId = emailId || null;
 
   useEffect(() => {
@@ -147,13 +309,10 @@ export default function InboxPage() {
 
   const handleSelectMailbox = (id: string) => {
     navigate(`/${id}`);
-    setMobileView("list");
-    setIsMobileMenuOpen(false);
   };
 
   const handleSelectEmail = (email: Email) => {
     navigate(`/${selectedMailboxId}/${email.id}`);
-    setMobileView("detail");
   };
 
   const handleToggleStar = () => {
@@ -277,129 +436,166 @@ export default function InboxPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-[#111418] text-gray-900 dark:text-white overflow-hidden font-sans transition-colors duration-200">
-      {/* Desktop: 3-column layout */}
-      <div className="hidden md:flex w-full h-full">
-        {/* Column 1: Sidebar */}
-        <div className="w-[220px] shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#111418]">
-          <MailboxList
-            selectedMailboxId={selectedMailboxId}
-            onSelectMailbox={handleSelectMailbox}
-            onComposeClick={() => setIsComposeOpen(true)}
-            onLogout={handleLogout}
-            theme={theme}
-            onToggleTheme={toggleTheme}
-          />
-        </div>
-
-        {/* Column 2: Email List */}
-        <div className="w-[360px] shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111418] flex flex-col">
-          <EmailList
-            mailboxId={selectedMailboxId}
-            selectedEmailId={selectedEmailId}
-            onSelectEmail={handleSelectEmail}
-            onToggleStar={handleToggleStar}
-          />
-        </div>
-
-        {/* Column 3: Email Detail */}
-        <div className="flex-1 bg-white dark:bg-[#111418] min-w-0">
-          <EmailDetail
-            emailId={selectedEmailId}
-            onToggleStar={handleToggleStar}
-            onReply={handleReply}
-            onReplyAll={handleReplyAll}
-            onForward={handleForward}
-            theme={theme}
-          />
-        </div>
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-[#111418] text-gray-900 dark:text-white overflow-hidden font-sans transition-colors duration-200">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111418]">
+        <span className="font-bold text-lg">MailApp</span>
+        <KanbanToggle isKanban={isKanban} onToggle={() => setIsKanban((v) => !v)} />
       </div>
+      <div className="flex-1 overflow-auto">
+        {isKanban ? (
+          <>
+            <KanbanBoard
+              columns={kanbanColumns}
+              onEmailDrop={handleKanbanDrop}
+              onPageChange={(colId, dir) => handleKanbanPage(colId as keyof typeof kanbanOffsets, dir)}
+              renderCardActions={(email) =>
+                email.mailbox_id !== "snoozed" ? (
+                  <>
+                    <button
+                      className="px-2 py-1 rounded bg-yellow-400 text-xs text-black hover:bg-yellow-500"
+                      onClick={() => {
+                        setKanbanEmails((prev) => {
+                          let movedEmail: Email | undefined;
+                          const newEmails = Object.fromEntries(
+                            Object.entries(prev).map(([col, emails]) => {
+                              const filtered = emails.filter((e) => {
+                                if (e.id === email.id) {
+                                  movedEmail = e;
+                                  return false;
+                                }
+                                return true;
+                              });
+                              return [col, filtered];
+                            })
+                          ) as typeof prev;
+                          if (movedEmail) {
+                            newEmails.snoozed = [movedEmail, ...newEmails.snoozed];
+                          }
+                          return newEmails;
+                        });
+                        snoozeEmailMutation.mutate(email.id);
+                      }}
+                    >
+                      Snooze
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="px-2 py-1 rounded bg-green-400 text-xs text-black hover:bg-green-500"
+                    onClick={() => {
+                      setKanbanEmails((prev) => {
+                        let movedEmail: Email | undefined;
+                        const newEmails = Object.fromEntries(
+                          Object.entries(prev).map(([col, emails]) => {
+                            const filtered = emails.filter((e) => {
+                              if (e.id === email.id) {
+                                movedEmail = e;
+                                return false;
+                              }
+                              return true;
+                            });
+                            return [col, filtered];
+                          })
+                        ) as typeof prev;
+                        if (movedEmail) {
+                          newEmails.inbox = [movedEmail, ...newEmails.inbox];
+                        }
+                        return newEmails;
+                      });
+                      wakeUpEmailMutation.mutate(email.id);
+                    }}
+                  >
+                    Unsnooze
+                  </button>
+                )
+              }
+              // Khi click vào email card thì mở popup detail
+              onEmailClick={(emailId) => setDetailEmailId(emailId)}
+            />
 
-      {/* Mobile Layout */}
-      <div className="md:hidden flex-1 flex flex-col w-full h-full relative">
-        {/* Mobile Header */}
-        <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 bg-white dark:bg-[#111418] shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="-ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
-          >
-            <span className="material-symbols-outlined">menu</span>
-          </Button>
-          <span className="font-bold text-lg">MailApp</span>
-          <div className="w-10"></div> {/* Spacer */}
-        </div>
-
-        {/* Mobile Menu Overlay */}
-        {isMobileMenuOpen && (
-          <div className="absolute inset-0 z-50 bg-white dark:bg-[#111418] flex flex-col">
-            <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 shrink-0">
-              <span className="font-bold text-lg">Menu</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="-mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </Button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
+            {/* Popup chi tiết email + summary Gemini */}
+            {detailEmailId && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30  backdrop-blur-sm p-4">
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col relative overflow-hidden border border-gray-200 dark:border-gray-800">
+                  <div className="absolute top-4 right-4 z-10">
+                    <button
+                      className="px-3 py-1.5 rounded-md bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-sm font-medium transition-colors border border-gray-200 dark:border-gray-700"
+                      onClick={() => setDetailEmailId(null)}
+                    >
+                      ✕ Đóng
+                    </button>
+                  </div>
+                  
+                  <div className="overflow-y-auto p-6 custom-scrollbar">
+                    <EmailDetail
+                      emailId={detailEmailId}
+                      onToggleStar={() => {}}
+                      theme={theme}
+                    />
+                    
+                    <div className="mt-8 border-t border-gray-200 dark:border-gray-800 pt-6">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-100 dark:border-blue-800/50">
+                        <div className="flex items-center gap-2 font-semibold mb-3 text-blue-700 dark:text-blue-400">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          Tóm tắt thông minh (Gemini AI)
+                        </div>
+                        
+                        {isSummaryLoading ? (
+                          <div className="flex items-center gap-3 text-gray-600 dark:text-gray-400 py-2">
+                            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                            <span>Đang phân tích nội dung email...</span>
+                          </div>
+                        ) : (
+                          <div className="text-sm leading-relaxed whitespace-pre-line text-gray-800 dark:text-gray-200">
+                            {summary || "Không thể tạo tóm tắt cho email này."}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Hiển thị summary động khi chọn email */}
+          </>
+        ) : (
+          <div className="flex h-full">
+            {/* Column 1: Sidebar */}
+            <div className="w-[220px] shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#111418]">
               <MailboxList
                 selectedMailboxId={selectedMailboxId}
                 onSelectMailbox={handleSelectMailbox}
-                onComposeClick={() => {
-                  setIsComposeOpen(true);
-                  setIsMobileMenuOpen(false);
-                }}
+                onComposeClick={() => setIsComposeOpen(true)}
                 onLogout={handleLogout}
                 theme={theme}
                 onToggleTheme={toggleTheme}
               />
             </div>
+            {/* Column 2: Email List */}
+            <div className="w-[360px] shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111418] flex flex-col">
+              <EmailList
+                mailboxId={selectedMailboxId}
+                selectedEmailId={selectedEmailId}
+                onSelectEmail={handleSelectEmail}
+                onToggleStar={handleToggleStar}
+              />
+            </div>
+            {/* Column 3: Email Detail */}
+            <div className="flex-1 bg-white dark:bg-[#111418] min-w-0">
+              <EmailDetail
+                emailId={selectedEmailId}
+                onToggleStar={handleToggleStar}
+                onReply={handleReply}
+                onReplyAll={handleReplyAll}
+                onForward={handleForward}
+                theme={theme}
+              />
+            </div>
           </div>
         )}
-
-        {/* Mobile Content */}
-        <div className="flex-1 overflow-hidden relative">
-          {mobileView === "list" ? (
-            <EmailList
-              mailboxId={selectedMailboxId}
-              selectedEmailId={selectedEmailId}
-              onSelectEmail={handleSelectEmail}
-              onToggleStar={handleToggleStar}
-            />
-          ) : (
-            <div className="absolute inset-0 flex flex-col bg-white dark:bg-[#111418]">
-              <div className="h-12 border-b border-gray-200 dark:border-gray-800 flex items-center px-2 shrink-0">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    navigate(`/${selectedMailboxId}`);
-                    setMobileView("list");
-                  }}
-                  className="flex items-center gap-1 px-2 py-1 h-auto rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300"
-                >
-                  <span className="material-symbols-outlined">arrow_back</span>
-                  <span>Back</span>
-                </Button>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <EmailDetail
-                  emailId={selectedEmailId}
-                  onToggleStar={handleToggleStar}
-                  onReply={handleReply}
-                  onReplyAll={handleReplyAll}
-                  onForward={handleForward}
-                  theme={theme}
-                />
-              </div>
-            </div>
-          )}
-        </div>
       </div>
-
       {/* Compose Email Dialog */}
       <ComposeEmail
         open={isComposeOpen}
