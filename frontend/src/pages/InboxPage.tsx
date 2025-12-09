@@ -31,6 +31,9 @@ export default function InboxPage() {
     subject: "",
     body: "",
   });
+  const [mobileView, setMobileView] = useState<"mailbox" | "list" | "detail">(
+    "list"
+  );
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("theme");
@@ -39,14 +42,14 @@ export default function InboxPage() {
         ? "dark"
         : "light";
       const initialTheme = (savedTheme as "light" | "dark") || systemTheme;
-      
+
       // Apply theme immediately on mount
       if (initialTheme === "dark") {
         document.documentElement.classList.add("dark");
       } else {
         document.documentElement.classList.remove("dark");
       }
-      
+
       return initialTheme;
     }
     return "light";
@@ -82,38 +85,41 @@ export default function InboxPage() {
       );
 
       let lastMutationTime = 0;
-      
+
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === "email_update") {
             console.log("Received email update:", data.payload);
-            
+
             // Ignore SSE updates for 3 seconds after user actions to prevent conflicts
             const timeSinceLastMutation = Date.now() - lastMutationTime;
             if (timeSinceLastMutation < 3000) {
               console.log("Ignoring SSE update - recent user action");
               return;
             }
-            
+
             // Only invalidate for new emails or external changes
-            queryClient.invalidateQueries({ 
+            queryClient.invalidateQueries({
               queryKey: ["emails"],
-              refetchType: 'none'
+              refetchType: "none",
             });
-            queryClient.invalidateQueries({ 
+            queryClient.invalidateQueries({
               queryKey: ["mailboxes"],
-              refetchType: 'none'
+              refetchType: "none",
             });
           }
         } catch (error) {
           console.error("Error parsing SSE message:", error);
         }
       };
-      
+
       // Track mutation time to debounce SSE updates
       const unsubscribe = queryClient.getMutationCache().subscribe((event) => {
-        if (event?.type === 'updated' && event.mutation.state.status === 'pending') {
+        if (
+          event?.type === "updated" &&
+          event.mutation.state.status === "pending"
+        ) {
           lastMutationTime = Date.now();
         }
       });
@@ -149,6 +155,7 @@ export default function InboxPage() {
 
   const handleSelectEmail = (email: Email) => {
     navigate(`/${selectedMailboxId}/${email.id}`);
+    setMobileView("detail");
   };
 
   const handleToggleStar = () => {
@@ -273,17 +280,35 @@ export default function InboxPage() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-[#111418] text-gray-900 dark:text-white overflow-hidden font-sans transition-colors duration-200">
+      {/* Header - Desktop and Mobile */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1f2e] shadow-sm">
+        {/* Mobile Menu Button */}
+        <button
+          onClick={() => setMobileView("mailbox")}
+          className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+        >
+          <span className="material-symbols-outlined text-gray-700 dark:text-gray-300">
+            menu
+          </span>
+        </button>
+
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-linear-to-br text-white from-blue-400 to-blue-500 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center shadow-md">
-            <span className="material-symbols-outlined text-white text-[20px]">mail</span>
+            <span className="material-symbols-outlined text-white text-[20px]">
+              mail
+            </span>
           </div>
-          <span className="text-xl bg-linear-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">Email Client AI</span>
+          <span className="text-xl bg-linear-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent hidden sm:inline">
+            Email Client AI
+          </span>
         </div>
         <KanbanToggle isKanban={false} onToggle={() => navigate("/kanban")} />
       </div>
-      <div className="flex-1 overflow-auto">
-        <div className="flex h-full">
+
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-hidden relative">
+        {/* Desktop Layout - 3 columns */}
+        <div className="hidden lg:flex h-full">
           {/* Column 1: Sidebar */}
           <div className="w-[220px] shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#111418]">
             <MailboxList
@@ -316,7 +341,111 @@ export default function InboxPage() {
             />
           </div>
         </div>
+
+        {/* Mobile Layout - Sliding panels */}
+        <div className="lg:hidden h-full">
+          {/* Mailbox List - Mobile Drawer */}
+          <div
+            className={`absolute inset-y-0 left-0 w-[280px] bg-gray-50 dark:bg-[#111418] border-r border-gray-200 dark:border-gray-800 transform transition-transform duration-300 z-30 ${
+              mobileView === "mailbox" ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Menu
+              </h2>
+              <button
+                onClick={() => setMobileView("list")}
+                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
+              >
+                <span className="material-symbols-outlined text-gray-700 dark:text-gray-300">
+                  close
+                </span>
+              </button>
+            </div>
+            <MailboxList
+              selectedMailboxId={selectedMailboxId}
+              onSelectMailbox={(id) => {
+                handleSelectMailbox(id);
+                setMobileView("list");
+              }}
+              onComposeClick={() => {
+                setIsComposeOpen(true);
+                setMobileView("list");
+              }}
+              onLogout={handleLogout}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+            />
+          </div>
+
+          {/* Email List - Mobile */}
+          <div
+            className={`absolute inset-0 bg-white dark:bg-[#111418] transition-transform duration-300 ${
+              mobileView === "detail" ? "-translate-x-full" : "translate-x-0"
+            }`}
+          >
+            <EmailList
+              mailboxId={selectedMailboxId}
+              selectedEmailId={selectedEmailId}
+              onSelectEmail={handleSelectEmail}
+              onToggleStar={handleToggleStar}
+            />
+          </div>
+
+          {/* Email Detail - Mobile */}
+          <div
+            className={`absolute inset-0 bg-white dark:bg-[#111418] transition-transform duration-300 ${
+              mobileView === "detail" ? "translate-x-0" : "translate-x-full"
+            }`}
+          >
+            {selectedEmailId && (
+              <>
+                <div className="flex items-center gap-2 p-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111418]">
+                  <button
+                    onClick={() => setMobileView("list")}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  >
+                    <span className="material-symbols-outlined text-gray-700 dark:text-gray-300">
+                      arrow_back
+                    </span>
+                  </button>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Email
+                  </h2>
+                </div>
+                <div className="h-[calc(100%-60px)] overflow-auto">
+                  <EmailDetail
+                    emailId={selectedEmailId}
+                    onToggleStar={handleToggleStar}
+                    onReply={handleReply}
+                    onReplyAll={handleReplyAll}
+                    onForward={handleForward}
+                    theme={theme}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Overlay for drawer */}
+          {mobileView === "mailbox" && (
+            <div
+              className="absolute inset-0 bg-black/50 z-20"
+              onClick={() => setMobileView("list")}
+            />
+          )}
+        </div>
       </div>
+
+      {/* Mobile Compose FAB */}
+      <button
+        onClick={() => setIsComposeOpen(true)}
+        className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center z-40"
+      >
+        <span className="material-symbols-outlined text-[24px]">edit</span>
+      </button>
+
       {/* Compose Email Dialog */}
       <ComposeEmail
         open={isComposeOpen}

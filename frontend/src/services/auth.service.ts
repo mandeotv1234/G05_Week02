@@ -6,6 +6,7 @@ import type {
   TokenResponse,
   GoogleSignInRequest,
   RefreshTokenRequest,
+  ImapLoginRequest,
   User,
 } from "@/types/auth";
 
@@ -27,6 +28,12 @@ export const authService = {
 
   googleSignIn: async (data: GoogleSignInRequest): Promise<TokenResponse> => {
     const response = await apiClient.post<TokenResponse>("/auth/google", data);
+    setAccessToken(response.data.access_token);
+    return response.data;
+  },
+
+  imapLogin: async (data: ImapLoginRequest): Promise<TokenResponse> => {
+    const response = await apiClient.post<TokenResponse>("/auth/imap", data);
     setAccessToken(response.data.access_token);
     return response.data;
   },

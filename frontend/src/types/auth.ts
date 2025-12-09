@@ -36,5 +36,12 @@ export interface RefreshTokenRequest {
 
 export interface GoogleSignInRequest {
   code: string;
-  scope: string [];
+  scope: string[];
+}
+
+export interface ImapLoginRequest {
+  email: string;
+  password: string;
+  imapServer: string;
+  imapPort: number;
 }
