@@ -31,6 +31,7 @@ export type KanbanBoardProps = {
   onEmailClick?: (emailId: string) => void;
   emailSummaries?: Record<string, { summary: string; loading: boolean }>;
   onRequestSummary?: (emailId: string) => void;
+  isLoading?: boolean;
 };
 
 // Helper function to strip HTML tags and decode entities
@@ -175,7 +176,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={`
-        flex-1 min-w-[320px] max-w-[400px] flex flex-col h-full
+        flex-1 min-w-0 flex flex-col h-full
         rounded-2xl transition-colors duration-200
         bg-gray-50/50 dark:bg-[#0d1014] border border-transparent
         ${isOver ? "bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/30" : ""}
@@ -232,7 +233,8 @@ export default function KanbanBoard({
   onPageChange, 
   onEmailClick,
   emailSummaries = {},
-  onRequestSummary
+  onRequestSummary,
+  isLoading = false
 }: KanbanBoardProps) {
   const [activeEmail, setActiveEmail] = useState<Email | null>(null);
   
@@ -283,7 +285,16 @@ export default function KanbanBoard({
       onDragStart={handleDragStart} 
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-6 w-full h-full overflow-x-auto p-6 bg-white dark:bg-[#111418]">
+      <div className="flex gap-3 w-full h-full p-3 bg-white dark:bg-[#111418] relative">
+        {/* Global Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/80 dark:bg-[#111418]/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-base font-medium text-gray-700 dark:text-gray-300">Đang tải dữ liệu...</span>
+            </div>
+          </div>
+        )}
         {columns.map((col) => (
           <DroppableColumn 
             key={col.id} 

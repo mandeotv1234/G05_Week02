@@ -149,22 +149,22 @@ export default function KanbanPage() {
   });
 
   // Query từng cột
-  const { data: inboxData, refetch: refetchInbox } = useQuery({
+  const { data: inboxData, refetch: refetchInbox, isLoading: isLoadingInbox } = useQuery({
     queryKey: ["emails", "kanban", "inbox", kanbanOffsets.inbox],
     queryFn: () =>
       emailService.getEmailsByStatus("inbox", limit, kanbanOffsets.inbox),
   });
-  const { data: todoData, refetch: refetchTodo } = useQuery({
+  const { data: todoData, refetch: refetchTodo, isLoading: isLoadingTodo } = useQuery({
     queryKey: ["emails", "kanban", "todo", kanbanOffsets.todo],
     queryFn: () =>
       emailService.getEmailsByStatus("todo", limit, kanbanOffsets.todo),
   });
-  const { data: doneData, refetch: refetchDone } = useQuery({
+  const { data: doneData, refetch: refetchDone, isLoading: isLoadingDone } = useQuery({
     queryKey: ["emails", "kanban", "done", kanbanOffsets.done],
     queryFn: () =>
       emailService.getEmailsByStatus("done", limit, kanbanOffsets.done),
   });
-  const { data: snoozedData, refetch: refetchSnoozed } = useQuery({
+  const { data: snoozedData, refetch: refetchSnoozed, isLoading: isLoadingSnoozed } = useQuery({
     queryKey: ["emails", "kanban", "snoozed", kanbanOffsets.snoozed],
     queryFn: () =>
       emailService.getEmailsByStatus("snoozed", limit, kanbanOffsets.snoozed),
@@ -261,6 +261,9 @@ export default function KanbanPage() {
     if (targetColumnId === "done") refetchDone();
     if (targetColumnId === "snoozed") refetchSnoozed();
   };
+
+  // Check if any column is loading
+  const isAnyLoading = isLoadingInbox || isLoadingTodo || isLoadingDone || isLoadingSnoozed;
 
   const kanbanColumns: KanbanColumn[] = [
     {
@@ -383,24 +386,12 @@ export default function KanbanPage() {
         <KanbanToggle isKanban={true} onToggle={() => navigate("/inbox")} />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden relative">
-        {/* Desktop Layout */}
-        <div className="hidden lg:flex h-full">
-          {/* Sidebar */}
-          <div className="w-[220px] shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#111418]">
-            <MailboxList
-              selectedMailboxId={selectedMailboxId}
-              onSelectMailbox={handleSelectMailbox}
-              onComposeClick={() => setIsComposeOpen(true)}
-              onLogout={handleLogout}
-              theme={theme}
-              onToggleTheme={toggleTheme}
-            />
-          </div>
-
-          {/* Kanban Board */}
-          <div className="flex-1 min-w-0">
+       {/* Main Content */}
+       <div className="flex-1 overflow-hidden relative">
+         {/* Desktop Layout */}
+         <div className="hidden lg:flex h-full">
+           {/* Kanban Board */}
+           <div className="flex-1 min-w-0 w-full">
             <KanbanBoard
               columns={kanbanColumns}
               onEmailDrop={handleKanbanDrop}
@@ -409,6 +400,7 @@ export default function KanbanPage() {
               }
               emailSummaries={summaryStates}
               onRequestSummary={handleRequestSummary}
+              isLoading={isAnyLoading}
               renderCardActions={(email) =>
                 email.mailbox_id !== "snoozed" ? (
                   <>
