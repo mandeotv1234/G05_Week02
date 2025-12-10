@@ -48,6 +48,8 @@ const getMailboxIconName = (type: string) => {
       return "forum";
     case "category_personal":
       return "person";
+    case "all":
+      return "mail";
     default:
       return "inbox";
   }
@@ -87,6 +89,8 @@ const getMailboxLabel = (type: string, name: string) => {
       return "Diễn đàn";
     case "category_personal":
       return "Cá nhân";
+    case "all":
+      return "Tất cả thư";
     default:
       return name;
   }

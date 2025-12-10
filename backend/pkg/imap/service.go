@@ -41,6 +41,18 @@ func (s *IMAPService) GetMailboxes(ctx context.Context, server string, port int,
 
 	var result []*emaildomain.Mailbox
 	for m := range mailboxes {
+		// Skip [Gmail] root folder or folders that cannot be selected
+		isNoSelect := false
+		for _, attr := range m.Attributes {
+			if attr == "\\Noselect" {
+				isNoSelect = true
+				break
+			}
+		}
+		if isNoSelect || m.Name == "[Gmail]" {
+			continue
+		}
+
 		// Map IMAP attributes to our domain
 		id := m.Name
 		name := m.Name
@@ -412,7 +424,7 @@ func (s *IMAPService) GetEmailByID(ctx context.Context, server string, port int,
 	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, imap.FetchUid, section.FetchItem()}
 
 	go func() {
-		done <- c.Fetch(seqset, items, messages)
+		done <- c.UidFetch(seqset, items, messages)
 	}()
 
 	msg := <-messages
