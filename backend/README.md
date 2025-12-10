@@ -18,6 +18,7 @@ JWT_REFRESH_EXPIRY=168h
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:8080/api/auth/google/callback
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
 3. Run:
