@@ -39,6 +39,26 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+func (h *AuthHandler) IMAPLogin(c *gin.Context) {
+	var req authdto.ImapLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := h.authUsecase.IMAPLogin(&req)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.SetSameSite(http.SameSiteNoneMode)
+	c.SetCookie("refresh_token", result.RefreshToken, 7*24*3600, "/", "", true, true)
+	result.RefreshToken = ""
+
+	c.JSON(http.StatusOK, result)
+}
+
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req authdto.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

@@ -16,6 +16,7 @@ import (
 	"ga03-backend/pkg/config"
 	"ga03-backend/pkg/database"
 	"ga03-backend/pkg/gmail"
+	"ga03-backend/pkg/imap"
 	"ga03-backend/pkg/sse"
 )
 
@@ -64,10 +65,13 @@ func main() {
 
 	// Initialize Gmail service
 	gmailService := gmail.NewService(cfg.GoogleClientID, cfg.GoogleClientSecret)
+	
+	// Initialize IMAP service
+	imapService := imap.NewService()
 
 	// Initialize use cases (dependency injection)
 	authUsecaseInstance := authUsecase.NewAuthUsecase(userRepo, cfg)
-	emailUsecaseInstance := emailUsecase.NewEmailUsecase(emailRepository, userRepo, gmailService, cfg.GooglePubSubTopic)
+	emailUsecaseInstance := emailUsecase.NewEmailUsecase(emailRepository, userRepo, gmailService, imapService, cfg, cfg.GooglePubSubTopic)
 
 	// Initialize HTTP handler
 	handler := api.NewHandler(authUsecaseInstance, emailUsecaseInstance, sseManager, cfg)

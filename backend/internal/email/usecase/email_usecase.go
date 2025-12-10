@@ -6,6 +6,9 @@ import (
 	authrepo "ga03-backend/internal/auth/repository"
 	emaildomain "ga03-backend/internal/email/domain"
 	"ga03-backend/internal/email/repository"
+	"ga03-backend/pkg/config"
+	"ga03-backend/pkg/imap"
+	"ga03-backend/pkg/utils/crypto"
 	"mime/multipart"
 
 	"golang.org/x/oauth2"
@@ -15,7 +18,9 @@ import (
 type emailUsecase struct {
 	emailRepo     repository.EmailRepository
 	userRepo      authrepo.UserRepository
-	mailProvider  emaildomain.MailProvider
+	mailProvider  emaildomain.MailProvider // Gmail Provider
+	imapProvider  *imap.IMAPService        // IMAP Provider
+	config        *config.Config
 	topicName     string
 	geminiService interface {
 		SummarizeEmail(ctx context.Context, emailText string) (string, error)
@@ -31,12 +36,14 @@ func (u *emailUsecase) SetGeminiService(svc interface {
 }
 
 // NewEmailUsecase creates a new instance of emailUsecase
-func NewEmailUsecase(emailRepo repository.EmailRepository, userRepo authrepo.UserRepository, mailProvider emaildomain.MailProvider, topicName string) EmailUsecase {
+func NewEmailUsecase(emailRepo repository.EmailRepository, userRepo authrepo.UserRepository, mailProvider emaildomain.MailProvider, imapProvider *imap.IMAPService, cfg *config.Config, topicName string) EmailUsecase {
 	// GeminiService cần được truyền vào khi khởi tạo
 	return &emailUsecase{
 		emailRepo:     emailRepo,
 		userRepo:      userRepo,
 		mailProvider:  mailProvider,
+		imapProvider:  imapProvider,
+		config:        cfg,
 		topicName:     topicName,
 		geminiService: nil, // cần set sau
 		kanbanStatus:  make(map[string]string),
@@ -105,6 +112,24 @@ func (u *emailUsecase) makeTokenUpdateCallback(userID string) emaildomain.TokenU
 }
 
 func (u *emailUsecase) GetAllMailboxes(userID string) ([]*emaildomain.Mailbox, error) {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	// IMAP Handler
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		return u.imapProvider.GetMailboxes(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass)
+	}
+
+	// Gmail Handler
 	accessToken, refreshToken, err := u.getUserTokens(userID)
 	if err != nil {
 		return nil, err
@@ -124,6 +149,24 @@ func (u *emailUsecase) GetMailboxByID(id string) (*emaildomain.Mailbox, error) {
 }
 
 func (u *emailUsecase) GetEmailsByMailbox(userID, mailboxID string, limit, offset int, query string) ([]*emaildomain.Email, int, error) {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if user == nil {
+		return nil, 0, fmt.Errorf("user not found")
+	}
+
+	// IMAP Handler
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		return u.imapProvider.GetEmails(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass, mailboxID, limit, offset)
+	}
+
+	// Gmail Handler
 	accessToken, refreshToken, err := u.getUserTokens(userID)
 	if err != nil {
 		return nil, 0, err
@@ -153,6 +196,24 @@ func (u *emailUsecase) GetAttachment(userID, messageID, attachmentID string) (*e
 }
 
 func (u *emailUsecase) GetEmailByID(userID, id string) (*emaildomain.Email, error) {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	// IMAP Handler
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		return u.imapProvider.GetEmailByID(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass, id)
+	}
+
+	// Gmail Handler
 	accessToken, refreshToken, err := u.getUserTokens(userID)
 	if err != nil {
 		return nil, err
@@ -168,6 +229,23 @@ func (u *emailUsecase) GetEmailByID(userID, id string) (*emaildomain.Email, erro
 }
 
 func (u *emailUsecase) MarkEmailAsRead(userID, id string) error {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// IMAP Handler
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		return u.imapProvider.MarkAsRead(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass, id)
+	}
+
 	accessToken, refreshToken, err := u.getUserTokens(userID)
 	if err != nil {
 		return err
@@ -191,6 +269,23 @@ func (u *emailUsecase) MarkEmailAsRead(userID, id string) error {
 }
 
 func (u *emailUsecase) MarkEmailAsUnread(userID, id string) error {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// IMAP Handler
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		return u.imapProvider.MarkAsUnread(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass, id)
+	}
+
 	accessToken, refreshToken, err := u.getUserTokens(userID)
 	if err != nil {
 		return err
@@ -214,6 +309,23 @@ func (u *emailUsecase) MarkEmailAsUnread(userID, id string) error {
 }
 
 func (u *emailUsecase) ToggleStar(userID, id string) error {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// IMAP Handler
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		return u.imapProvider.ToggleStar(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass, id)
+	}
+
 	accessToken, refreshToken, err := u.getUserTokens(userID)
 	if err != nil {
 		return err
@@ -245,6 +357,15 @@ func (u *emailUsecase) SendEmail(userID, to, cc, bcc, subject, body string, file
 		return fmt.Errorf("user not found")
 	}
 
+	// IMAP Handler (SMTP)
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		return u.imapProvider.SendEmail(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass, to, subject, body)
+	}
+
 	if user.AccessToken == "" {
 		return nil // Not supported for local storage yet
 	}
@@ -254,6 +375,23 @@ func (u *emailUsecase) SendEmail(userID, to, cc, bcc, subject, body string, file
 }
 
 func (u *emailUsecase) TrashEmail(userID, id string) error {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// IMAP Handler
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		return u.imapProvider.TrashEmail(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass, id)
+	}
+
 	accessToken, refreshToken, err := u.getUserTokens(userID)
 	if err != nil {
 		return err
@@ -269,6 +407,23 @@ func (u *emailUsecase) TrashEmail(userID, id string) error {
 }
 
 func (u *emailUsecase) ArchiveEmail(userID, id string) error {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// IMAP Handler
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		return u.imapProvider.ArchiveEmail(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass, id)
+	}
+
 	accessToken, refreshToken, err := u.getUserTokens(userID)
 	if err != nil {
 		return err
@@ -321,6 +476,48 @@ func (u *emailUsecase) MoveEmailToMailbox(userID, emailID, mailboxID string) err
 
 // GetEmailsByStatus returns emails by status (for Kanban columns)
 func (u *emailUsecase) GetEmailsByStatus(userID, status string, limit, offset int) ([]*emaildomain.Email, int, error) {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if user == nil {
+		return nil, 0, fmt.Errorf("user not found")
+	}
+
+	// IMAP Handler
+	if user.Provider == "imap" {
+		decryptedPass, err := crypto.Decrypt(user.ImapPassword, u.config.EncryptionKey)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to decrypt password: %w", err)
+		}
+		
+		// For IMAP, we fetch INBOX and filter by local Kanban status
+		// Note: This is inefficient for large mailboxes as we fetch then filter.
+		// A better approach would be to store Kanban status in DB for IMAP users too.
+		emails, total, err := u.imapProvider.GetEmails(context.Background(), user.ImapServer, user.ImapPort, user.Email, decryptedPass, "INBOX", limit, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		var filtered []*emaildomain.Email
+		if status == "inbox" {
+			for _, email := range emails {
+				s, ok := u.kanbanStatus[email.ID]
+				if !ok || s == "inbox" {
+					filtered = append(filtered, email)
+				}
+			}
+		} else {
+			for _, email := range emails {
+				if s, ok := u.kanbanStatus[email.ID]; ok && s == status {
+					filtered = append(filtered, email)
+				}
+			}
+		}
+		return filtered, total, nil
+	}
+
+	// Gmail Handler
 	accessToken, refreshToken, err := u.getUserTokens(userID)
 	if err != nil {
 		return nil, 0, err
