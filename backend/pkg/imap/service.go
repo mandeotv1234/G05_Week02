@@ -140,12 +140,19 @@ func (s *IMAPService) GetMailboxes(ctx context.Context, server string, port int,
 		
 		// Let's try to map standard IDs.
 		// We will need to handle the reverse mapping in GetEmails.
+
+		// Get mailbox status (Unread count)
+		var count int
+		status, err := c.Status(m.Name, []imap.StatusItem{imap.StatusUnseen})
+		if err == nil {
+			count = int(status.Unseen)
+		}
 		
 		result = append(result, &emaildomain.Mailbox{
 			ID:    id, // Normalized ID if standard, else real name
 			Name:  name,
 			Type:  type_,
-			Count: 0,
+			Count: count,
 		})
 	}
 
