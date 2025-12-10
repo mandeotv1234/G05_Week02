@@ -1,9 +1,9 @@
 # React Authentication + Email Dashboard
 
 **Public URLs:**
-- **Frontend (Vercel):** https://g04-react-email-client.vercel.app/
-- **Backend (Render):** https://g04-react-email-client.onrender.com/
-- **Monorepo:** https://github.com/PhanPhuc269/G04-React-Email-Client
+- **Frontend (Vercel):** https://g05-week02.vercel.app/
+- **Backend (Render):** https://g05-week02.onrender.com/
+- **Monorepo:** https://github.com/mandeotv1234/G05_Week02
 
 ---
 
@@ -375,6 +375,53 @@ npm test
 - [ ] Email composition functionality
 - [ ] Search and filter capabilities
 
+## This Week's Requirements (Implemented)
+
+The project has been updated to satisfy this week's assignment requirements. Key implemented items:
+
+- Kanban UI with 4 configurable columns (Inbox, To Do, Done, Snoozed) as implemented in the frontend (KanbanPage / KanbanBoard).
+- Cards display real email data fetched from the backend and include sender, subject, and a preview snippet.
+- Drag & drop support: cards can be moved between columns and the backend state is updated on drop.
+- Snooze feature: moving an email to the `snoozed` column sets a snooze timer (24 hours by default) and hides the card from active columns until wake-up.
+- Wake-up logic: snoozed emails are programmatically restored to the Inbox after the snooze period (implemented for both mock/local emails and provider-backed mail via in-memory timers).
+- Gemini (LLM) integration: the backend calls an LLM service to generate dynamic email summaries which are displayed in the UI (detail view / card summary).
+- IMAP support: basic IMAP provider logic is implemented to allow logging in with IMAP accounts and fetching messages across mailbox types. IMAP message IDs are encoded and resolved so that `GetEmailByID` works for IMAP-style IDs.
+
+Note: IMAP and provider-backed kanban state (for Gmail/IMAP) currently uses in-memory maps for this assignment. For production, persist snooze/kanban state so it survives server restarts.
+
+---
+
+## Grading Rubric (Scoring Criteria)
+
+Feature | Scoring Criteria | Max Points
+---|---:|---:
+I | • The UI displays a board with separate configurable columns (for example: Inbox, To Do, Done).
+
+  • Cards show real email data retrieved from the backend (must include Sender, Subject, and a content snippet).
+
+  • The layout is organized and visually readable (Kanban style). | 25
+II | • User can successfully drag a card from one column to another.
+
+  • Dropping a card triggers a backend update to change the email's state.
+
+  • The UI updates the card's position immediately without a full page reload. | 25
+III | • The "Snooze" action correctly hides/removes a card from its active column (e.g., Inbox).
+
+  • The card is successfully moved to the "Snoozed" column/state.
+
+  • Logic is implemented to "wake" (restore) the email to the active view after the configured time has elapsed. | 25
+IV | • The backend successfully sends real email text to the processing API (LLM or library).
+
+  • The system returns a dynamically generated summary (no hard-coded or mocked summary text).
+
+  • The summary is clearly displayed on the card or in the detail view. | 25
+
+**Total** || **100**
+
+---
+
+If you'd like, I can also add a short "Quick Testing" subsection that explains how to temporarily shorten the snooze duration for manual testing (e.g., set to a few seconds), plus example curl commands to snooze and verify the wake-up behavior. 
+
 ## License
 
 This project is created for educational purposes.
@@ -382,3 +429,4 @@ This project is created for educational purposes.
 ## Author
 
 Created as part of the AWDA GA03 assignment.
+
