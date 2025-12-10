@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // userRepository implements UserRepository interface
@@ -84,18 +85,12 @@ func (r *userRepository) DeleteRefreshTokensByUser(userID string) error {
 }
 
 // ReplaceRefreshToken replaces any existing refresh tokens for the user and inserts the new one.
-// We implement this as a transaction: delete existing tokens for user_id then insert the new token.
-// This avoids requiring an ON CONFLICT unique constraint on user_id.
+// We implement this using ON CONFLICT (upsert) to handle race conditions better.
 func (r *userRepository) ReplaceRefreshToken(token *authdomain.RefreshToken) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("user_id = ?", token.UserID).Delete(&authdomain.RefreshToken{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(token).Error; err != nil {
-			return err
-		}
-		return nil
-	})
+	return r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"token", "expires_at"}),
+	}).Create(token).Error
 }
 
 // HashPassword hashes a password using bcrypt

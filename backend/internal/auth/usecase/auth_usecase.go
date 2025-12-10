@@ -47,7 +47,7 @@ func (u *authUsecase) Login(req *authdto.LoginRequest) (*authdto.TokenResponse, 
 		return nil, errors.New("invalid email or password")
 	}
 
-	if user.Provider != "email" {
+	if user.Provider != "email" && user.Provider != "imap" {
 		return nil, errors.New("please use Google Sign-In for this account")
 	}
 
@@ -110,7 +110,34 @@ func (u *authUsecase) IMAPLogin(req *authdto.ImapLoginRequest) (*authdto.TokenRe
 	}
 
 	// 4. Generate tokens
-	return u.generateTokens(user)
+	resp, err := u.generateTokens(user)
+	if err != nil {
+		return nil, err
+	}
+
+	if user.Password == "" {
+		resp.NeedsPasswordSet = true
+	}
+
+	return resp, nil
+}
+
+func (u *authUsecase) SetPassword(userID string, password string) error {
+	user, err := u.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("user not found")
+	}
+
+	hashedPassword, err := repository.HashPassword(password)
+	if err != nil {
+		return err
+	}
+
+	user.Password = hashedPassword
+	return u.userRepo.Update(user)
 }
 
 func (u *authUsecase) Register(req *authdto.RegisterRequest) (*authdto.TokenResponse, error) {

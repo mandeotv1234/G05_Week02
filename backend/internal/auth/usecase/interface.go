@@ -14,4 +14,5 @@ type AuthUsecase interface {
 	RefreshToken(refreshToken string) (*authdto.TokenResponse, error)
 	Logout(refreshToken string) error
 	ValidateToken(tokenString string) (*authdomain.User, error)
+	SetPassword(userID string, password string) error
 }

@@ -29,9 +29,14 @@ type ImapLoginRequest struct {
 	ImapPort   int    `json:"imapPort" binding:"required"`
 }
 
+type SetPasswordRequest struct {
+	Password string `json:"password" binding:"required,min=6"`
+}
+
 type TokenResponse struct {
-	AccessToken  string              `json:"access_token"`
-	RefreshToken string              `json:"refresh_token"`
-	User         *authdomain.User    `json:"user"`
+	AccessToken      string              `json:"access_token"`
+	RefreshToken     string              `json:"refresh_token"`
+	User             *authdomain.User    `json:"user"`
+	NeedsPasswordSet bool                `json:"needs_password_set"`
 }
 

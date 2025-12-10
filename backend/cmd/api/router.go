@@ -33,6 +33,7 @@ func SetupRoutes(r *gin.Engine, authUsecase authUsecase.AuthUsecase, emailUsecas
 			auth.POST("/refresh", authHandler.RefreshToken)
 			auth.GET("/me", delivery.AuthMiddleware(authUsecase), authHandler.Me)
 			auth.POST("/logout", authHandler.Logout)
+			auth.POST("/set-password", delivery.AuthMiddleware(authUsecase), authHandler.SetPassword)
 		}
 
 		// Email routes (protected)

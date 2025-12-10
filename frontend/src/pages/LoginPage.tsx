@@ -83,7 +83,11 @@ export default function LoginPage() {
     onSuccess: (data) => {
       toast.success("Đăng nhập IMAP thành công!");
       dispatch(setUser(data.user));
-      navigate("/inbox");
+      if (data.needs_password_set) {
+        navigate("/set-password");
+      } else {
+        navigate("/inbox");
+      }
     },
     onError: (err: unknown) => {
       const error = err as { response?: { data?: { error?: string } } };

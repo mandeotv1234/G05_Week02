@@ -1,21 +1,30 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { PrivateRoute } from './PrivateRoute';
-import LoginPage from '@/pages/LoginPage';
-import SignUpPage from '@/pages/SignUpPage';
-import InboxPage from '@/pages/InboxPage';
-import KanbanPage from '@/pages/KanbanPage';
+import { createBrowserRouter, Navigate } from "react-router-dom";
+import { PrivateRoute } from "./PrivateRoute";
+import LoginPage from "@/pages/LoginPage";
+import SignUpPage from "@/pages/SignUpPage";
+import InboxPage from "@/pages/InboxPage";
+import KanbanPage from "@/pages/KanbanPage";
+import SetPasswordPage from "@/pages/SetPasswordPage";
 
 export const router = createBrowserRouter([
   {
-    path: '/login',
+    path: "/login",
     element: <LoginPage />,
   },
   {
-    path: '/signup',
+    path: "/signup",
     element: <SignUpPage />,
   },
   {
-    path: '/kanban',
+    path: "/set-password",
+    element: (
+      <PrivateRoute>
+        <SetPasswordPage />
+      </PrivateRoute>
+    ),
+  },
+  {
+    path: "/kanban",
     element: (
       <PrivateRoute>
         <KanbanPage />
@@ -23,7 +32,7 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/',
+    path: "/",
     element: (
       <PrivateRoute>
         <InboxPage />
@@ -31,7 +40,7 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/:mailbox',
+    path: "/:mailbox",
     element: (
       <PrivateRoute>
         <InboxPage />
@@ -39,7 +48,7 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/:mailbox/:emailId',
+    path: "/:mailbox/:emailId",
     element: (
       <PrivateRoute>
         <InboxPage />
@@ -47,7 +56,7 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '*',
+    path: "*",
     element: <Navigate to="/inbox" replace />,
   },
 ]);

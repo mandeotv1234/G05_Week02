@@ -23,6 +23,7 @@ export interface TokenResponse {
   access_token: string;
   refresh_token: string;
   user: User;
+  needs_password_set?: boolean;
 }
 
 export interface AuthResponse {

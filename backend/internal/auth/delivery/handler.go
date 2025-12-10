@@ -79,6 +79,27 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+func (h *AuthHandler) SetPassword(c *gin.Context) {
+	var req authdto.SetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.authUsecase.SetPassword(userID, req.Password); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "password set successfully"})
+}
+
 func (h *AuthHandler) GoogleSignIn(c *gin.Context) {
 	var req authdto.GoogleSignInRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

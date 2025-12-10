@@ -49,6 +49,10 @@ export const authService = {
     return { user: response.data.user };
   },
 
+  setPassword: async (password: string): Promise<void> => {
+    await apiClient.post("/auth/set-password", { password });
+  },
+
   logout: async (): Promise<void> => {
     try {
       await apiClient.post("/auth/logout", {});
