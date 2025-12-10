@@ -22,13 +22,10 @@ const loginSchema = z.object({
 });
 
 const imapLoginSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  email: z.string().email("Invalid email address").trim(),
   password: z.string().min(1, "Password is required"),
-  imapServer: z.string().min(1, "IMAP server is required"),
-  imapPort: z
-    .string()
-    .regex(/^\d+$/, "Port must be a number")
-    .transform(Number),
+  imapServer: z.string().min(1, "IMAP server is required").trim(),
+  imapPort: z.union([z.string(), z.number()]).transform((val) => Number(val)),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;

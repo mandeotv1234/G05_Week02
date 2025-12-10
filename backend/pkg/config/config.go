@@ -25,6 +25,7 @@ type Config struct {
 	DBName             string
 	DBSSLMode          string
 	GeminiApiKey       string
+	EncryptionKey      string // 32-byte key for AES encryption
 }
 
 func Load() *Config {
@@ -63,6 +64,7 @@ func Load() *Config {
 		DBName:             getEnv("DB_NAME", "email_dashboard"),
 		DBSSLMode:          getEnv("DB_SSLMODE", "disable"),
 		GeminiApiKey:       os.Getenv("GEMINI_API_KEY"),
+		EncryptionKey:      getEnv("ENCRYPTION_KEY", "12345678901234567890123456789012"), // Default for dev only
 	}
 }
 

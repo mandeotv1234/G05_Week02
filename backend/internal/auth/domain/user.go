@@ -8,10 +8,16 @@ type User struct {
 	Password     string    `json:"-"` // Never return password in JSON
 	Name         string    `json:"name"`
 	AvatarURL    string    `json:"avatar_url,omitempty"`
-	Provider     string    `json:"provider"` // "email" or "google"
+	Provider     string    `json:"provider"` // "email" or "google" or "imap"
 	AccessToken  string    `json:"-"` // Google access token (not returned in JSON)
 	RefreshToken string    `json:"-"` // Google refresh token (not returned in JSON)
 	TokenExpiry  time.Time `json:"-"` // When the access token expires
+	
+	// IMAP specific fields
+	ImapServer   string    `json:"imap_server,omitempty"`
+	ImapPort     int       `json:"imap_port,omitempty"`
+	ImapPassword string    `json:"-"` // Store IMAP password (should be encrypted in production)
+
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

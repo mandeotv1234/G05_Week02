@@ -14,6 +14,8 @@ import (
 	authdto "ga03-backend/internal/auth/dto"
 	"ga03-backend/internal/auth/repository"
 	"ga03-backend/pkg/config"
+	"ga03-backend/pkg/imap"
+	"ga03-backend/pkg/utils/crypto"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -53,6 +55,61 @@ func (u *authUsecase) Login(req *authdto.LoginRequest) (*authdto.TokenResponse, 
 		return nil, errors.New("invalid email or password")
 	}
 
+	return u.generateTokens(user)
+}
+
+func (u *authUsecase) IMAPLogin(req *authdto.ImapLoginRequest) (*authdto.TokenResponse, error) {
+	// 1. Try to connect and login to IMAP server
+	client, err := imap.ConnectAndLogin(req.ImapServer, req.ImapPort, req.Email, req.Password)
+	if err != nil {
+		return nil, fmt.Errorf("IMAP authentication failed: %w", err)
+	}
+	defer client.Logout()
+
+	// 2. Check if user exists
+	user, err := u.userRepo.FindByEmail(req.Email)
+	if err != nil {
+		return nil, err
+	}
+
+	// Encrypt password
+	encryptedPass, err := crypto.Encrypt(req.Password, u.config.EncryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt password: %w", err)
+	}
+
+	// 3. Create or Update user
+	if user == nil {
+		user = &authdomain.User{
+			Email:        req.Email,
+			Name:         req.Email, // Use email as name initially
+			Provider:     "imap",
+			ImapServer:   req.ImapServer,
+			ImapPort:     req.ImapPort,
+			ImapPassword: encryptedPass, // Store encrypted password
+		}
+		if err := u.userRepo.Create(user); err != nil {
+			return nil, err
+		}
+	} else {
+		// Update existing user's IMAP credentials
+		// This allows users to update their password or server settings by logging in again
+		user.ImapServer = req.ImapServer
+		user.ImapPort = req.ImapPort
+		user.ImapPassword = encryptedPass
+		
+		// If the user was previously a different provider, we might want to handle that
+		// For now, we just update the provider to imap if it wasn't
+		if user.Provider != "imap" {
+			user.Provider = "imap"
+		}
+
+		if err := u.userRepo.Update(user); err != nil {
+			return nil, err
+		}
+	}
+
+	// 4. Generate tokens
 	return u.generateTokens(user)
 }
 

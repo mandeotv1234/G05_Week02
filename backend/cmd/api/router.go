@@ -27,6 +27,7 @@ func SetupRoutes(r *gin.Engine, authUsecase authUsecase.AuthUsecase, emailUsecas
 		auth := api.Group("/auth")
 		{
 			auth.POST("/login", authHandler.Login)
+			auth.POST("/imap", authHandler.IMAPLogin)
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/google", authHandler.GoogleSignIn)
 			auth.POST("/refresh", authHandler.RefreshToken)

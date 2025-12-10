@@ -8,6 +8,7 @@ import (
 // AuthUsecase defines the interface for authentication use cases
 type AuthUsecase interface {
 	Login(req *authdto.LoginRequest) (*authdto.TokenResponse, error)
+	IMAPLogin(req *authdto.ImapLoginRequest) (*authdto.TokenResponse, error)
 	Register(req *authdto.RegisterRequest) (*authdto.TokenResponse, error)
 	GoogleSignIn(code string, scope []string) (*authdto.TokenResponse, error)
 	RefreshToken(refreshToken string) (*authdto.TokenResponse, error)
