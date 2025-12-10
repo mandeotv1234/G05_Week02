@@ -10,6 +10,7 @@ import (
 	"ga03-backend/pkg/imap"
 	"ga03-backend/pkg/utils/crypto"
 	"mime/multipart"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -38,7 +39,7 @@ func (u *emailUsecase) SetGeminiService(svc interface {
 // NewEmailUsecase creates a new instance of emailUsecase
 func NewEmailUsecase(emailRepo repository.EmailRepository, userRepo authrepo.UserRepository, mailProvider emaildomain.MailProvider, imapProvider *imap.IMAPService, cfg *config.Config, topicName string) EmailUsecase {
 	// GeminiService cần được truyền vào khi khởi tạo
-	return &emailUsecase{
+	uc := &emailUsecase{
 		emailRepo:     emailRepo,
 		userRepo:      userRepo,
 		mailProvider:  mailProvider,
@@ -48,6 +49,52 @@ func NewEmailUsecase(emailRepo repository.EmailRepository, userRepo authrepo.Use
 		geminiService: nil, // cần set sau
 		kanbanStatus:  make(map[string]string),
 	}
+	uc.startSnoozeChecker()
+	return uc
+}
+
+func (u *emailUsecase) startSnoozeChecker() {
+	ticker := time.NewTicker(1 * time.Minute)
+	go func() {
+		for range ticker.C {
+			u.checkSnoozedEmails()
+		}
+	}()
+}
+
+func (u *emailUsecase) checkSnoozedEmails() {
+	// Get snoozed emails from repo
+	emails, _, err := u.emailRepo.GetEmailsByStatus("snoozed", 1000, 0)
+	if err != nil {
+		return
+	}
+
+	now := time.Now()
+	for _, email := range emails {
+		if email.SnoozedUntil != nil && email.SnoozedUntil.Before(now) {
+			// Wake up!
+			u.kanbanStatus[email.ID] = "inbox"
+			email.Status = "inbox"
+			email.SnoozedUntil = nil
+			u.emailRepo.UpdateEmail(email)
+			fmt.Printf("Email %s woke up from snooze\n", email.ID)
+		}
+	}
+}
+
+func (u *emailUsecase) SnoozeEmail(userID, emailID string, snoozeUntil time.Time) error {
+	// Update local status
+	u.kanbanStatus[emailID] = "snoozed"
+
+	// Also update the email object in repository if possible
+	email, err := u.emailRepo.GetEmailByID(emailID)
+	if err == nil && email != nil {
+		email.Status = "snoozed"
+		email.SnoozedUntil = &snoozeUntil
+		u.emailRepo.UpdateEmail(email)
+	}
+
+	return nil
 }
 
 // Lấy summary email qua Gemini

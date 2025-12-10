@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	authdomain "ga03-backend/internal/auth/domain"
 	emaildto "ga03-backend/internal/email/dto"
@@ -63,6 +64,42 @@ func (h *EmailHandler) MoveEmailToMailbox(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "email moved", "mailbox_id": req.MailboxID})
+}
+
+// POST /emails/:id/snooze
+func (h *EmailHandler) SnoozeEmail(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		SnoozeUntil string `json:"snooze_until"` // ISO 8601 format
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.SnoozeUntil == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing snooze_until"})
+		return
+	}
+
+	snoozeTime, err := time.Parse(time.RFC3339, req.SnoozeUntil)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use ISO 8601"})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	userData, ok := user.(*authdomain.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user data"})
+		return
+	}
+	userID := userData.ID
+
+	if err := h.emailUsecase.SnoozeEmail(userID, id, snoozeTime); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "email snoozed", "snooze_until": snoozeTime})
 }
 
 func NewEmailHandler(emailUsecase usecase.EmailUsecase) *EmailHandler {

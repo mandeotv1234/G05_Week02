@@ -4,6 +4,7 @@ import (
 	"context"
 	emaildomain "ga03-backend/internal/email/domain"
 	"mime/multipart"
+	"time"
 )
 
 // EmailUsecase defines the interface for email use cases
@@ -23,6 +24,7 @@ type EmailUsecase interface {
 	WatchMailbox(userID string) error
 	SummarizeEmail(ctx context.Context, emailID string) (string, error)
 	MoveEmailToMailbox(userID, emailID, mailboxID string) error
+	SnoozeEmail(userID, emailID string, snoozeUntil time.Time) error
 	SetGeminiService(svc interface {
 		SummarizeEmail(ctx context.Context, emailText string) (string, error)
 	})

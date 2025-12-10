@@ -50,6 +50,7 @@ func SetupRoutes(r *gin.Engine, authUsecase authUsecase.AuthUsecase, emailUsecas
 			emails.PATCH("/:id/unread", emailHandler.MarkAsUnread)
 			emails.PATCH("/:id/star", emailHandler.ToggleStar)
 			emails.PATCH("/:id/mailbox", emailHandler.MoveEmailToMailbox)
+			emails.POST("/:id/snooze", emailHandler.SnoozeEmail)
 			emails.POST("/send", emailHandler.SendEmail)
 			emails.POST("/:id/trash", emailHandler.TrashEmail)
 			emails.POST("/:id/archive", emailHandler.ArchiveEmail)

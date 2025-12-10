@@ -27,6 +27,7 @@ type Email struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 	ReceivedAt  time.Time    `json:"received_at"`
 	CreatedAt   time.Time    `json:"created_at"`
+	SnoozedUntil *time.Time  `json:"snoozed_until,omitempty"`
 }
 
 type Attachment struct {

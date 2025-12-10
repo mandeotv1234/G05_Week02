@@ -16,11 +16,23 @@ export const emailService = {
     return response.data;
   },
   getEmailSummary: async (emailId: string): Promise<string> => {
-    const response = await apiClient.get<{ summary: string }>(`/emails/${emailId}/summary`);
+    const response = await apiClient.get<{ summary: string }>(
+      `/emails/${emailId}/summary`
+    );
     return response.data.summary;
   },
-  moveEmailToMailbox: async (emailId: string, mailboxId: string): Promise<void> => {
-    await apiClient.patch(`/emails/${emailId}/mailbox`, { mailbox_id: mailboxId });
+  moveEmailToMailbox: async (
+    emailId: string,
+    mailboxId: string
+  ): Promise<void> => {
+    await apiClient.patch(`/emails/${emailId}/mailbox`, {
+      mailbox_id: mailboxId,
+    });
+  },
+  snoozeEmail: async (emailId: string, snoozeUntil: Date): Promise<void> => {
+    await apiClient.post(`/emails/${emailId}/snooze`, {
+      snooze_until: snoozeUntil.toISOString(),
+    });
   },
   getAllMailboxes: async (): Promise<Mailbox[]> => {
     const response = await apiClient.get<{ mailboxes: Mailbox[] }>(

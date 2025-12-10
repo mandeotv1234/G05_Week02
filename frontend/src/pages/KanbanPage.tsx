@@ -14,6 +14,7 @@ import { API_BASE_URL } from "@/config/api";
 import KanbanBoard from "@/components/kanban/KanbanBoard";
 import type { KanbanColumn } from "@/components/kanban/KanbanBoard";
 import KanbanToggle from "@/components/kanban/KanbanToggle";
+import { SnoozeDialog } from "@/components/inbox/SnoozeDialog";
 
 export default function KanbanPage() {
   const navigate = useNavigate();
@@ -86,6 +87,13 @@ export default function KanbanPage() {
   const [mobileSelectedColumn, setMobileSelectedColumn] =
     useState<string>("inbox");
 
+  // Snooze dialog state
+  const [snoozeDialogOpen, setSnoozeDialogOpen] = useState(false);
+  const [emailToSnooze, setEmailToSnooze] = useState<{
+    id: string;
+    subject: string;
+  } | null>(null);
+
   const { data: summary, isFetching: isSummaryLoading } = useQuery({
     queryKey: ["email-summary", detailEmailId],
     queryFn: async () => {
@@ -149,22 +157,38 @@ export default function KanbanPage() {
   });
 
   // Query từng cột
-  const { data: inboxData, refetch: refetchInbox, isLoading: isLoadingInbox } = useQuery({
+  const {
+    data: inboxData,
+    refetch: refetchInbox,
+    isLoading: isLoadingInbox,
+  } = useQuery({
     queryKey: ["emails", "kanban", "inbox", kanbanOffsets.inbox],
     queryFn: () =>
       emailService.getEmailsByStatus("inbox", limit, kanbanOffsets.inbox),
   });
-  const { data: todoData, refetch: refetchTodo, isLoading: isLoadingTodo } = useQuery({
+  const {
+    data: todoData,
+    refetch: refetchTodo,
+    isLoading: isLoadingTodo,
+  } = useQuery({
     queryKey: ["emails", "kanban", "todo", kanbanOffsets.todo],
     queryFn: () =>
       emailService.getEmailsByStatus("todo", limit, kanbanOffsets.todo),
   });
-  const { data: doneData, refetch: refetchDone, isLoading: isLoadingDone } = useQuery({
+  const {
+    data: doneData,
+    refetch: refetchDone,
+    isLoading: isLoadingDone,
+  } = useQuery({
     queryKey: ["emails", "kanban", "done", kanbanOffsets.done],
     queryFn: () =>
       emailService.getEmailsByStatus("done", limit, kanbanOffsets.done),
   });
-  const { data: snoozedData, refetch: refetchSnoozed, isLoading: isLoadingSnoozed } = useQuery({
+  const {
+    data: snoozedData,
+    refetch: refetchSnoozed,
+    isLoading: isLoadingSnoozed,
+  } = useQuery({
     queryKey: ["emails", "kanban", "snoozed", kanbanOffsets.snoozed],
     queryFn: () =>
       emailService.getEmailsByStatus("snoozed", limit, kanbanOffsets.snoozed),
@@ -229,6 +253,27 @@ export default function KanbanPage() {
 
   // Optimistic update khi kéo thả
   const handleKanbanDrop = (emailId: string, targetColumnId: string) => {
+    // Find the email being moved
+    let movedEmail: Email | undefined;
+    for (const emails of Object.values(kanbanEmails)) {
+      const found = emails.find((e) => e.id === emailId);
+      if (found) {
+        movedEmail = found;
+        break;
+      }
+    }
+
+    // If moving to snoozed, show dialog
+    if (targetColumnId === "snoozed" && movedEmail) {
+      setEmailToSnooze({
+        id: emailId,
+        subject: movedEmail.subject,
+      });
+      setSnoozeDialogOpen(true);
+      return;
+    }
+
+    // Otherwise, proceed with normal move
     setKanbanEmails((prev) => {
       // Tìm email trong tất cả các cột
       let movedEmail: Email | undefined;
@@ -262,8 +307,44 @@ export default function KanbanPage() {
     if (targetColumnId === "snoozed") refetchSnoozed();
   };
 
+  // Handle snooze confirmation
+  const handleSnoozeConfirm = (snoozeUntil: Date) => {
+    if (!emailToSnooze) return;
+
+    // Optimistic update
+    setKanbanEmails((prev) => {
+      let movedEmail: Email | undefined;
+      const newEmails = Object.fromEntries(
+        Object.entries(prev).map(([col, emails]) => {
+          const filtered = emails.filter((e) => {
+            if (e.id === emailToSnooze.id) {
+              movedEmail = e;
+              return false;
+            }
+            return true;
+          });
+          return [col, filtered];
+        })
+      ) as typeof prev;
+      if (movedEmail) {
+        newEmails.snoozed = [movedEmail, ...newEmails.snoozed];
+      }
+      return newEmails;
+    });
+
+    // Call API
+    emailService.snoozeEmail(emailToSnooze.id, snoozeUntil).then(() => {
+      refetchSnoozed();
+    });
+
+    // Reset state
+    setSnoozeDialogOpen(false);
+    setEmailToSnooze(null);
+  };
+
   // Check if any column is loading
-  const isAnyLoading = isLoadingInbox || isLoadingTodo || isLoadingDone || isLoadingSnoozed;
+  const isAnyLoading =
+    isLoadingInbox || isLoadingTodo || isLoadingDone || isLoadingSnoozed;
 
   const kanbanColumns: KanbanColumn[] = [
     {
@@ -386,12 +467,12 @@ export default function KanbanPage() {
         <KanbanToggle isKanban={true} onToggle={() => navigate("/inbox")} />
       </div>
 
-       {/* Main Content */}
-       <div className="flex-1 overflow-hidden relative">
-         {/* Desktop Layout */}
-         <div className="hidden lg:flex h-full">
-           {/* Kanban Board */}
-           <div className="flex-1 min-w-0 w-full">
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden relative">
+        {/* Desktop Layout */}
+        <div className="hidden lg:flex h-full">
+          {/* Kanban Board */}
+          <div className="flex-1 min-w-0 w-full">
             <KanbanBoard
               columns={kanbanColumns}
               onEmailDrop={handleKanbanDrop}
@@ -796,6 +877,14 @@ export default function KanbanPage() {
         initialCc={composeInitialData.cc}
         initialSubject={composeInitialData.subject}
         initialBody={composeInitialData.body}
+      />
+
+      {/* Snooze Dialog */}
+      <SnoozeDialog
+        open={snoozeDialogOpen}
+        onOpenChange={setSnoozeDialogOpen}
+        onConfirm={handleSnoozeConfirm}
+        emailSubject={emailToSnooze?.subject}
       />
     </div>
   );
